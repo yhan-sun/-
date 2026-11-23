@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "hongguo-player",
+  "outputfilename": "HongguoPlayer",
+  "frontend:dir": "frontend/dist",
+  "author": {
+    "name": "Community",
+    "email": "community@example.com"
+  }
+}
