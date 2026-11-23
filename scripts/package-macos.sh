@@ -4,8 +4,8 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-echo "=== Building Hongguo Player (Go + Wails) ==="
-/Users/pyu/env/go/bin/go build -ldflags="-s -w" -o "bin/hongguo-player" .
+echo "=== Building Hongguo Player (Go + Wails with production tags) ==="
+/Users/pyu/env/go/bin/go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/hongguo-player" .
 
 APP_NAME="Hongguo Player"
 APP_BUNDLE="bin/${APP_NAME}.app"
@@ -73,10 +73,15 @@ if [ -f "$ICON_SOURCE" ]; then
     rm -rf "${ICONSET}"
 fi
 
+echo "=== Ad-hoc signing & removing quarantine ==="
+codesign --force --deep --sign - "${APP_BUNDLE}"
+xattr -cr "${APP_BUNDLE}"
+
 echo "=== Packaging DMG ==="
 DMG_PATH="bin/${APP_NAME}-7.9.0-arm64.dmg"
 rm -f "${DMG_PATH}"
 hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE}" -ov -format UDZO "${DMG_PATH}"
+xattr -cr "${DMG_PATH}"
 
 echo "=== Packaging Complete ==="
 echo "App Bundle: ${APP_BUNDLE}"

@@ -102,14 +102,29 @@
         }
         if (prop === 'browseCategories') {
           return [
-            { id: 'all', name: '全部' },
-            { id: 'urban', name: '都市' },
-            { id: 'ancient', name: '古装' },
-            { id: 'fantasy', name: '逆袭' }
+            { slug: 'real-drama', label: '真人剧' },
+            { slug: 'hot-drama', label: '热播总榜' },
+            { slug: 'comic-drama', label: '动态漫剧' }
           ];
         }
         if (prop === 'browseList') {
           return { success: true, results: [], total: 0, totalPages: 0 };
+        }
+        if (prop === 'getMediaSources') {
+          return {
+            success: true,
+            sources: [
+              { id: 'hongguo', label: '红果短剧', enabled: true },
+              { id: 'xifan', label: '西饭短剧', enabled: true },
+              { id: 'hema', label: '河马短剧', enabled: true }
+            ]
+          };
+        }
+        if (prop === 'getCustomSources') {
+          return { success: true, sources: [] };
+        }
+        if (prop === 'getWindowLayout') {
+          return 'landscape';
         }
         if (prop === 'getSeriesList') {
           return [];

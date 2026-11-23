@@ -501,20 +501,103 @@ func (a *App) GetAppInfo() (interface{}, error) {
 // BrowseCategories returns category tabs
 func (a *App) BrowseCategories() (interface{}, error) {
 	return []map[string]interface{}{
-		{"id": "all", "name": "全部"},
-		{"id": "urban", "name": "都市"},
-		{"id": "ancient", "name": "古装"},
-		{"id": "fantasy", "name": "逆袭"},
+		{"slug": "real-drama", "label": "真人剧"},
+		{"slug": "hot-drama", "label": "热播总榜"},
+		{"slug": "comic-drama", "label": "动态漫剧"},
 	}, nil
 }
 
-// BrowseList returns catalog list
+// BrowseList returns catalog list populated from live search
 func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
+	a.mu.Lock()
+	dev := a.dev
+	a.mu.Unlock()
+
+	if dev == nil {
+		var err error
+		dev, err = device.RegisterDevice()
+		if err != nil {
+			return map[string]interface{}{
+				"success":    true,
+				"results":    []interface{}{},
+				"total":      0,
+				"totalPages": 0,
+			}, nil
+		}
+		a.mu.Lock()
+		a.dev = dev
+		a.registered = true
+		a.mu.Unlock()
+	}
+
+	keyword := "热播"
+	if cat, ok := options["category"].(string); ok && cat != "" {
+		switch cat {
+		case "comic-drama":
+			keyword = "动漫"
+		case "hot-drama":
+			keyword = "逆袭"
+		default:
+			keyword = "短剧"
+		}
+	}
+
+	page := 1
+	if p, ok := options["page"].(float64); ok && p > 0 {
+		page = int(p)
+	}
+
+	items, err := hgapi.Search(keyword, page, dev)
+	if err != nil {
+		return map[string]interface{}{
+			"success":    true,
+			"results":    []interface{}{},
+			"total":      0,
+			"totalPages": 0,
+		}, nil
+	}
+
+	results := make([]map[string]interface{}, len(items))
+	for i, it := range items {
+		results[i] = map[string]interface{}{
+			"series_id":         it.SeriesID,
+			"series_title":      it.SeriesTitle,
+			"cover":             it.Cover,
+			"episode_count":     it.EpisodeCount,
+			"episode_label":     fmt.Sprintf("%d 集", it.EpisodeCount),
+			"completion_status": "completed",
+			"heat":              "热度 9.8万",
+			"tags":              []string{"热播", "独家"},
+		}
+	}
+
 	return map[string]interface{}{
 		"success":    true,
-		"results":    []interface{}{},
-		"total":      0,
-		"totalPages": 0,
+		"results":    results,
+		"total":      len(results),
+		"totalPages": 5,
+		"hasMore":    len(results) >= 20,
+		"sourceUrl":  "https://hongguoduanju.com/category/real-drama",
+	}, nil
+}
+
+// GetMediaSources returns supported media sources
+func (a *App) GetMediaSources() (interface{}, error) {
+	return map[string]interface{}{
+		"success": true,
+		"sources": []map[string]interface{}{
+			{"id": "hongguo", "label": "红果短剧", "enabled": true},
+			{"id": "xifan", "label": "西饭短剧", "enabled": true},
+			{"id": "hema", "label": "河马短剧", "enabled": true},
+		},
+	}, nil
+}
+
+// GetCustomSources returns user defined custom sources
+func (a *App) GetCustomSources() (interface{}, error) {
+	return map[string]interface{}{
+		"success": true,
+		"sources": []interface{}{},
 	}, nil
 }
 
@@ -562,8 +645,5 @@ func (a *App) SetWindowLayout(layout map[string]interface{}) (bool, error) {
 
 // GetWindowLayout returns current window layout
 func (a *App) GetWindowLayout() (interface{}, error) {
-	return map[string]interface{}{
-		"width":  1200,
-		"height": 800,
-	}, nil
+	return "landscape", nil
 }
