@@ -229,8 +229,8 @@
         if (prop === 'getAppInfo') {
           return {
             version: '7.9.0',
-            brand: '红果短剧',
-            appName: '红果短剧',
+            brand: '牛油果短剧',
+            appName: '牛油果短剧',
             platform: 'darwin',
             preview: false
           };
@@ -357,7 +357,7 @@
           return {
             success: true,
             sources: [
-              { id: 'hongguo', label: '红果短剧', enabled: true },
+              { id: 'hongguo', label: '牛油果短剧', enabled: true },
               { id: 'xifan', label: '西饭短剧', enabled: true },
               { id: 'hema', label: '河马短剧', enabled: true }
             ]

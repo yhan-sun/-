@@ -787,7 +787,7 @@ func (a *App) GetMediaSources() (interface{}, error) {
 	return map[string]interface{}{
 		"success": true,
 		"sources": []map[string]interface{}{
-			{"id": "hongguo", "label": "红果短剧", "enabled": true},
+			{"id": "hongguo", "label": "牛油果短剧", "enabled": true},
 			{"id": "xifan", "label": "西饭短剧", "enabled": true},
 			{"id": "hema", "label": "河马短剧", "enabled": true},
 		},

@@ -4,10 +4,10 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
-echo "=== Building Hongguo Player (Go + Wails with production tags) ==="
-/Users/pyu/env/go/bin/go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/hongguo-player" .
+echo "=== Building Niuyouguo Player (Go + Wails with production tags) ==="
+/Users/pyu/env/go/bin/go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/niuyouguo-player" .
 
-APP_NAME="Hongguo Player"
+APP_NAME="牛油果短剧"
 APP_BUNDLE="bin/${APP_NAME}.app"
 CONTENTS="${APP_BUNDLE}/Contents"
 MACOS="${CONTENTS}/MacOS"
@@ -17,8 +17,8 @@ echo "=== Creating macOS App Bundle ==="
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${MACOS}" "${RESOURCES}"
 
-cp "bin/hongguo-player" "${MACOS}/hongguo-player"
-chmod +x "${MACOS}/hongguo-player"
+cp "bin/niuyouguo-player" "${MACOS}/niuyouguo-player"
+chmod +x "${MACOS}/niuyouguo-player"
 
 cat << 'EOF' > "${CONTENTS}/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -28,17 +28,17 @@ cat << 'EOF' > "${CONTENTS}/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleName</key>
-    <string>Hongguo Player</string>
+    <string>牛油果短剧</string>
     <key>CFBundleDisplayName</key>
-    <string>红果短剧</string>
+    <string>牛油果短剧</string>
     <key>CFBundleIdentifier</key>
-    <string>com.hongguo.player</string>
+    <string>com.niuyouguo.player</string>
     <key>CFBundleVersion</key>
     <string>7.9.0</string>
     <key>CFBundleShortVersionString</key>
     <string>7.9.0</string>
     <key>CFBundleExecutable</key>
-    <string>hongguo-player</string>
+    <string>niuyouguo-player</string>
     <key>CFBundleIconFile</key>
     <string>appicon</string>
     <key>LSMinimumSystemVersion</key>

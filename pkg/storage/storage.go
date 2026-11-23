@@ -88,7 +88,13 @@ func NewStore() *Store {
 	if err != nil {
 		home = "."
 	}
-	dir := filepath.Join(home, ".hongguo")
+	dir := filepath.Join(home, ".niuyouguo")
+	oldDir := filepath.Join(home, ".hongguo")
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if _, errOld := os.Stat(oldDir); errOld == nil {
+			_ = os.Rename(oldDir, dir)
+		}
+	}
 	_ = os.MkdirAll(dir, 0755)
 
 	defaultDownloadPath := filepath.Join(home, "Downloads")
