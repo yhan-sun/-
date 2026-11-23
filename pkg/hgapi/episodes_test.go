@@ -2,12 +2,13 @@ package hgapi
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
 
 func TestExtractRouterData(t *testing.T) {
-	html := `<!DOCTYPE html><html><head><script>window._ROUTER_DATA = {"loaderData":{"player_(series_id)/page":{"seriesDetail":{"series_id":"123","series_name":"测试剧","series_cover":"http://cover.jpg","accessible_episode_cnt":3,"vid_list":["1001","1002","1003"]}}}};</script></head><body></body></html>`
+	html := `<!DOCTYPE html><html><head><script>window._ROUTER_DATA = {"loaderData":{"player_(series_id)/page":{"seriesDetail":{"series_id":9000000000000000123,"series_name":"测试剧","series_cover":"http://cover.jpg","accessible_episode_cnt":3,"vid_list":[9000000000000000124,"1002","1003"]}}}};</script></head><body></body></html>`
 	data, err := extractRouterData(html)
 	if err != nil {
 		t.Fatalf("extractRouterData failed: %v", err)
@@ -15,6 +16,9 @@ func TestExtractRouterData(t *testing.T) {
 	loaderData := data["loaderData"].(map[string]interface{})
 	page := loaderData["player_(series_id)/page"].(map[string]interface{})
 	detail := page["seriesDetail"].(map[string]interface{})
+	if detail["series_id"] != json.Number("9000000000000000123") || detail["vid_list"].([]interface{})[0] != json.Number("9000000000000000124") {
+		t.Fatal("numeric IDs changed while decoding episode metadata")
+	}
 	if detail["series_name"] != "测试剧" {
 		t.Errorf("expected series_name 测试剧, got %v", detail["series_name"])
 	}

@@ -3,52 +3,27 @@ package downloader
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
 	"hongguo/pkg/media"
-	"hongguo/pkg/media/cenc"
 )
 
-type TaskStatus string
-
-const (
-	StatusPending     TaskStatus = "pending"
-	StatusDownloading TaskStatus = "downloading"
-	StatusDecrypting  TaskStatus = "decrypting"
-	StatusCompleted   TaskStatus = "completed"
-	StatusFailed      TaskStatus = "failed"
-	StatusStopped     TaskStatus = "stopped"
-)
-
-type DownloadTask struct {
-	ID              string     `json:"id"`
-	SeriesID        string     `json:"series_id"`
-	SeriesTitle     string     `json:"series_title"`
-	Vid             string     `json:"vid"`
-	VidIndex        int        `json:"vid_index"`
-	Title           string     `json:"title"`
-	Status          TaskStatus `json:"status"`
-	Progress        float64    `json:"progress"`
-	Speed           string     `json:"speed"`
-	TotalBytes      int64      `json:"total_bytes"`
-	DownloadedBytes int64      `json:"downloaded_bytes"`
-	SavePath        string     `json:"save_path"`
-	Error           string     `json:"error,omitempty"`
-
-	cancel context.CancelFunc
+type job struct {
+	DownloadTask
+	cancel context.CancelFunc // non-nil until the worker releases its files and slot
 }
 
 type EventCallback func(event string, data interface{})
 
 type Downloader struct {
 	mu       sync.RWMutex
-	tasks    map[string]*DownloadTask
-	queue    []string
+	tasks    map[string]*job
+	queue    []*job
 	active   int
 	maxConc  int
 	resolver media.StreamResolver
@@ -59,18 +34,12 @@ type Downloader struct {
 
 func NewDownloader(resolver media.StreamResolver, destDir string, cb EventCallback) *Downloader {
 	return &Downloader{
-		tasks:    make(map[string]*DownloadTask),
-		queue:    make([]string, 0),
+		tasks:    make(map[string]*job),
 		maxConc:  3,
 		resolver: resolver,
 		cb:       cb,
 		destDir:  destDir,
-		client: &http.Client{
-			Transport: &http.Transport{
-				Proxy: nil,
-			},
-			Timeout: 60 * time.Second,
-		},
+		client:   &http.Client{Transport: &http.Transport{Proxy: nil}, Timeout: 60 * time.Second},
 	}
 }
 
@@ -84,342 +53,332 @@ func (d *Downloader) SetSaveDir(dir string) {
 	d.SetDestDir(dir)
 }
 
-func (d *Downloader) AddTask(seriesID, seriesTitle, vid, title string, vidIndex int, quality ...string) *DownloadTask {
+func (d *Downloader) SetMaxConcurrent(limit int) {
+	if limit < 1 || limit > 10 {
+		return
+	}
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	taskID := fmt.Sprintf("%s_%s", seriesID, vid)
-	if existing, ok := d.tasks[taskID]; ok {
-		if existing.Status == StatusFailed || existing.Status == StatusStopped {
-			existing.Status = StatusPending
-			existing.Error = ""
-			d.queue = append(d.queue, taskID)
-			go d.pump()
-		}
-		return existing
+	changed := d.maxConc != limit
+	d.maxConc = limit
+	d.pumpLocked()
+	d.mu.Unlock()
+	if changed {
+		d.queueChanged()
 	}
-
-	cleanSeriesTitle := sanitizeFilename(seriesTitle)
-	if cleanSeriesTitle == "" {
-		cleanSeriesTitle = seriesID
-	}
-	cleanTitle := sanitizeFilename(title)
-	if cleanTitle == "" {
-		cleanTitle = fmt.Sprintf("第%d集", vidIndex)
-	}
-
-	saveDir := filepath.Join(d.destDir, cleanSeriesTitle)
-	_ = os.MkdirAll(saveDir, 0755)
-	fileName := fmt.Sprintf("第%d集_%s.mp4", vidIndex, cleanTitle)
-	savePath := filepath.Join(saveDir, fileName)
-
-	task := &DownloadTask{
-		ID:          taskID,
-		SeriesID:    seriesID,
-		SeriesTitle: seriesTitle,
-		Vid:         vid,
-		VidIndex:    vidIndex,
-		Title:       title,
-		Status:      StatusPending,
-		Progress:    0,
-		SavePath:    savePath,
-	}
-
-	d.tasks[taskID] = task
-	d.queue = append(d.queue, taskID)
-
-	if d.cb != nil {
-		d.cb("download-task-added", task)
-	}
-
-	go d.pump()
-	return task
 }
 
-func (d *Downloader) pump() {
+func (d *Downloader) emit(event string, data interface{}) {
+	if d.cb != nil {
+		d.cb(event, data)
+	}
+}
+
+func (d *Downloader) queueChanged() {
+	d.emit("download-queue-changed", nil)
+}
+
+func (d *Downloader) AddTask(seriesID, seriesTitle, vid, title string, vidIndex int, quality ...string) *DownloadTask {
+	task, _ := d.Enqueue(EpisodeInfo{seriesID, seriesTitle, vid, vidIndex}, title, "")
+	return &task
+}
+
+func (d *Downloader) Enqueue(info EpisodeInfo, title, cover string) (DownloadTask, bool) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	for d.active < d.maxConc && len(d.queue) > 0 {
-		taskID := d.queue[0]
-		d.queue = d.queue[1:]
-
-		task, ok := d.tasks[taskID]
-		if !ok || task.Status != StatusPending {
-			continue
+	id := info.SeriesID + "_" + info.Vid
+	if existing := d.tasks[id]; existing != nil {
+		queued := d.retryLocked(existing)
+		snapshot := existing.DownloadTask
+		d.pumpLocked()
+		d.mu.Unlock()
+		if queued {
+			d.queueChanged()
 		}
+		return snapshot, queued
+	}
 
+	task := &job{DownloadTask: DownloadTask{
+		EpisodeInfo: info,
+		ID:          id,
+		Title:       title,
+		Cover:       cover,
+		StartTime:   time.Now().UnixMilli(),
+		Status:      StatusPending,
+		SavePath:    EpisodePath(d.destDir, info, title),
+	}}
+	d.tasks[id] = task
+	d.queue = append(d.queue, task)
+	snapshot := task.DownloadTask
+	d.pumpLocked()
+	d.mu.Unlock()
+	d.emit("download-task-added", &snapshot)
+	d.queueChanged()
+	return snapshot, true
+}
+
+func (d *Downloader) pumpLocked() {
+	for d.active < d.maxConc && len(d.queue) > 0 {
+		task := d.queue[0]
+		d.queue[0] = nil
+		d.queue = d.queue[1:]
 		d.active++
 		ctx, cancel := context.WithCancel(context.Background())
 		task.cancel = cancel
 		task.Status = StatusDownloading
-
 		go d.runTask(ctx, task)
 	}
 }
 
-func (d *Downloader) runTask(ctx context.Context, task *DownloadTask) {
-	defer func() {
-		d.mu.Lock()
-		d.active--
-		d.mu.Unlock()
-		d.pump()
-	}()
+func (d *Downloader) runTask(ctx context.Context, task *job) {
+	path, received, err := d.transfer(ctx, task)
+	d.mu.Lock()
+	stopped := ctx.Err() != nil
+	task.cancel()
+	task.cancel = nil
+	d.active--
 
-	mediaURL, contentKey, err := d.resolver(ctx, task.SeriesID, task.Vid)
-	if err != nil {
-		d.failTask(task, fmt.Sprintf("解析片源失败: %v", err))
-		return
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", mediaURL, nil)
-	if err != nil {
-		d.failTask(task, err.Error())
-		return
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Referer", "https://hongguoduanju.com/")
-
-	resp, err := d.client.Do(req)
-	if err != nil {
-		d.failTask(task, fmt.Sprintf("请求视频失败: %v", err))
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		d.failTask(task, fmt.Sprintf("HTTP %d", resp.StatusCode))
-		return
-	}
-
-	task.TotalBytes = resp.ContentLength
-	tempPath := task.SavePath + ".part"
-
-	out, err := os.Create(tempPath)
-	if err != nil {
-		d.failTask(task, fmt.Sprintf("创建临时文件失败: %v", err))
-		return
-	}
-
-	buf := make([]byte, 32*1024)
-	var downloaded int64
-	lastTime := time.Now()
-	var lastBytes int64
-
-	for {
-		select {
-		case <-ctx.Done():
-			_ = out.Close()
-			_ = os.Remove(tempPath)
-			d.mu.Lock()
-			task.Status = StatusStopped
-			d.mu.Unlock()
-			if d.cb != nil {
-				d.cb("download-stopped", task)
+	var event string
+	if d.tasks[task.ID] == task {
+		if stopped {
+			// A retry requested during cancellation waits for the old worker.
+			if task.Status == StatusPending {
+				d.queue = append(d.queue, task)
 			}
-			return
-		default:
-		}
-
-		n, rErr := resp.Body.Read(buf)
-		if n > 0 {
-			_, wErr := out.Write(buf[:n])
-			if wErr != nil {
-				_ = out.Close()
-				d.failTask(task, fmt.Sprintf("写入文件失败: %v", wErr))
-				return
+		} else {
+			if err == nil {
+				err = publishFile(path, task.SavePath)
 			}
-			downloaded += int64(n)
-			task.DownloadedBytes = downloaded
-
-			if task.TotalBytes > 0 {
-				task.Progress = float64(downloaded) / float64(task.TotalBytes) * 100
-			}
-
-			now := time.Now()
-			elapsed := now.Sub(lastTime).Seconds()
-			if elapsed >= 0.5 {
-				speedBytes := float64(downloaded-lastBytes) / elapsed
-				task.Speed = formatSpeed(speedBytes)
-				lastTime = now
-				lastBytes = downloaded
-				if d.cb != nil {
-					d.cb("download-progress", task)
+			task.Speed = ""
+			task.DownloadedBytes = received
+			if err != nil {
+				task.Status = StatusFailed
+				task.Error = err.Error()
+				event = "download-failed"
+			} else {
+				task.Status = StatusCompleted
+				task.Progress = 100
+				if task.TotalBytes <= 0 {
+					task.TotalBytes = received
 				}
+				event = "download-completed"
 			}
 		}
-		if rErr != nil {
-			if rErr == io.EOF {
-				break
-			}
-			_ = out.Close()
-			d.failTask(task, fmt.Sprintf("读取失败: %v", rErr))
-			return
-		}
 	}
-	_ = out.Close()
-
-	// Decrypt if necessary
-	if len(contentKey) > 0 {
-		d.mu.Lock()
-		task.Status = StatusDecrypting
-		d.mu.Unlock()
-		if d.cb != nil {
-			d.cb("download-progress", task)
-		}
-
-		err = cenc.DecryptMp4File(tempPath, task.SavePath, contentKey)
-		_ = os.Remove(tempPath)
-		if err != nil {
-			d.failTask(task, fmt.Sprintf("解密失败: %v", err))
-			return
-		}
-	} else {
-		_ = os.Rename(tempPath, task.SavePath)
+	snapshot := task.DownloadTask
+	d.pumpLocked()
+	d.mu.Unlock()
+	if path != "" {
+		os.Remove(path)
 	}
+	if event != "" {
+		d.emit(event, &snapshot)
+	}
+	d.queueChanged()
+}
 
-	d.mu.Lock()
-	task.Status = StatusCompleted
-	task.Progress = 100
+func stop(task *job) bool {
+	if task.Status != StatusPending && task.Status != StatusDownloading && task.Status != StatusDecrypting {
+		return false
+	}
+	if task.cancel != nil {
+		task.cancel()
+	}
+	task.Status = StatusStopped
 	task.Speed = ""
-	d.mu.Unlock()
-
-	if d.cb != nil {
-		d.cb("download-completed", task)
-	}
+	return true
 }
 
-func (d *Downloader) failTask(task *DownloadTask, errMsg string) {
+func (d *Downloader) StopTask(taskID string) bool {
 	d.mu.Lock()
-	task.Status = StatusFailed
-	task.Error = errMsg
+	task := d.tasks[taskID]
+	if task == nil || !stop(task) {
+		d.mu.Unlock()
+		return false
+	}
+	d.queue = slices.DeleteFunc(d.queue, func(queued *job) bool { return queued == task })
+	snapshot := task.DownloadTask
 	d.mu.Unlock()
-
-	if d.cb != nil {
-		d.cb("download-failed", task)
-	}
-}
-
-func (d *Downloader) StopTask(taskID string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if task, ok := d.tasks[taskID]; ok {
-		if task.cancel != nil {
-			task.cancel()
-		}
-		task.Status = StatusStopped
-	}
+	d.emit("download-stopped", &snapshot)
+	d.queueChanged()
+	return true
 }
 
 func (d *Downloader) GetTasks() []*DownloadTask {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-
 	list := make([]*DownloadTask, 0, len(d.tasks))
 	for _, t := range d.tasks {
-		list = append(list, t)
+		snapshot := t.DownloadTask
+		list = append(list, &snapshot)
 	}
 	return list
+}
+
+func (d *Downloader) TaskDirectory(id string) (string, bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	task := d.tasks[id]
+	if task == nil {
+		return "", false
+	}
+	return filepath.Dir(task.SavePath), true
+}
+
+func missingDownload(path string) bool {
+	info, err := os.Stat(path)
+	return os.IsNotExist(err) || (err == nil && !info.Mode().IsRegular())
+}
+
+// VerifyFiles scans outside the lock, then confirms a missing file before
+// changing its state in case a concurrent retry already replaced the file.
+func (d *Downloader) VerifyFiles() {
+	d.mu.RLock()
+	var completed []*job
+	for _, task := range d.tasks {
+		if task.Status == StatusCompleted {
+			completed = append(completed, task)
+		}
+	}
+	d.mu.RUnlock()
+	changed := false
+	for _, task := range completed {
+		if !missingDownload(task.SavePath) {
+			continue
+		}
+		d.mu.Lock()
+		if d.tasks[task.ID] == task && task.Status == StatusCompleted && missingDownload(task.SavePath) {
+			task.Status, task.Error = StatusFailed, "已下载的文件不可用，请重试"
+			task.Progress, task.DownloadedBytes, task.TotalBytes = 0, 0, 0
+			changed = true
+		}
+		d.mu.Unlock()
+	}
+	if changed {
+		d.queueChanged()
+	}
+}
+
+func (d *Downloader) countsLocked() (active, queued int) {
+	for _, task := range d.tasks {
+		switch task.Status {
+		case StatusPending:
+			queued++
+		case StatusDownloading, StatusDecrypting:
+			active++
+		}
+	}
+	return active, queued
 }
 
 func (d *Downloader) GetStatus() (active, queued int) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return d.active, len(d.queue)
+	return d.countsLocked()
 }
 
 func (d *Downloader) GetQueueStatus() map[string]interface{} {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	return map[string]interface{}{
-		"active": d.active,
-		"queued": len(d.queue),
-	}
+	active, queued := d.countsLocked()
+	return map[string]interface{}{"active": active, "queued": queued, "maxConcurrent": d.maxConc}
 }
 
-func (d *Downloader) PauseAll() {
+func (d *Downloader) PauseAll() int {
 	d.mu.Lock()
-	defer d.mu.Unlock()
+	var stopped []DownloadTask
 	for _, task := range d.tasks {
-		if task.Status == StatusDownloading || task.Status == StatusPending {
-			if task.cancel != nil {
-				task.cancel()
-			}
-			task.Status = StatusStopped
+		if stop(task) {
+			stopped = append(stopped, task.DownloadTask)
 		}
 	}
 	d.queue = nil
+	d.mu.Unlock()
+	for _, task := range stopped {
+		d.emit("download-stopped", &task)
+	}
+	if len(stopped) > 0 {
+		d.queueChanged()
+	}
+	return len(stopped)
 }
 
-func (d *Downloader) ResumeAll() {
+func (d *Downloader) retryLocked(task *job) bool {
+	if task == nil || (task.Status != StatusStopped && task.Status != StatusFailed) {
+		return false
+	}
+	task.Status, task.Error, task.Speed = StatusPending, "", ""
+	task.Progress, task.TotalBytes, task.DownloadedBytes = 0, 0, 0
+	if task.cancel == nil {
+		d.queue = append(d.queue, task)
+	}
+	return true
+}
+
+func (d *Downloader) ResumeAll() int {
 	d.mu.Lock()
-	for id, task := range d.tasks {
-		if task.Status == StatusStopped || task.Status == StatusFailed {
-			task.Status = StatusPending
-			task.Error = ""
-			d.queue = append(d.queue, id)
+	count := 0
+	for _, task := range d.tasks {
+		if d.retryLocked(task) {
+			count++
 		}
 	}
+	d.pumpLocked()
 	d.mu.Unlock()
-	go d.pump()
+	if count > 0 {
+		d.queueChanged()
+	}
+	return count
 }
 
-func (d *Downloader) RetryTask(taskID string) {
-	d.mu.Lock()
-	if task, ok := d.tasks[taskID]; ok {
-		task.Status = StatusPending
-		task.Error = ""
-		d.queue = append(d.queue, taskID)
-	}
-	d.mu.Unlock()
-	go d.pump()
+func (d *Downloader) RetryTask(taskID string) bool {
+	return d.RetryTasks([]string{taskID}) == 1
 }
 
-func (d *Downloader) DeleteTask(taskID string, deleteDisk bool) {
+func (d *Downloader) RetryTasks(ids []string) int {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	task, ok := d.tasks[taskID]
-	if !ok {
-		return
+	count := 0
+	for _, id := range ids {
+		if d.retryLocked(d.tasks[id]) {
+			count++
+		}
 	}
+	d.pumpLocked()
+	d.mu.Unlock()
+	if count > 0 {
+		d.queueChanged()
+	}
+	return count
+}
 
+func (d *Downloader) DeleteTask(taskID string, deleteDisk bool) (removed bool, freed int64, err error) {
+	d.mu.Lock()
+	task := d.tasks[taskID]
+	if task == nil {
+		d.mu.Unlock()
+		return false, 0, nil
+	}
+	if deleteDisk && task.Status == StatusCompleted {
+		info, err := os.Stat(task.SavePath)
+		if err == nil {
+			if !info.Mode().IsRegular() {
+				d.mu.Unlock()
+				return false, 0, fmt.Errorf("下载路径不是文件: %s", task.SavePath)
+			}
+			err = os.Remove(task.SavePath)
+			if err == nil {
+				freed = info.Size()
+			}
+		}
+		if err != nil && !os.IsNotExist(err) {
+			d.mu.Unlock()
+			return false, 0, err
+		}
+	}
 	if task.cancel != nil {
 		task.cancel()
 	}
-
-	if deleteDisk && task.SavePath != "" {
-		_ = os.Remove(task.SavePath)
-	}
-
+	d.queue = slices.DeleteFunc(d.queue, func(queued *job) bool { return queued == task })
 	delete(d.tasks, taskID)
-}
-
-func formatSpeed(bytesPerSec float64) string {
-	if bytesPerSec >= 1024*1024 {
-		return fmt.Sprintf("%.1f MB/s", bytesPerSec/(1024*1024))
-	}
-	if bytesPerSec >= 1024 {
-		return fmt.Sprintf("%.1f KB/s", bytesPerSec/1024)
-	}
-	return fmt.Sprintf("%.0f B/s", bytesPerSec)
-}
-
-func sanitizeFilename(name string) string {
-	invalid := []rune{'/', '\\', ':', '*', '?', '"', '<', '>', '|', '\n', '\r', '\t'}
-	out := make([]rune, 0, len(name))
-	for _, r := range name {
-		isBad := false
-		for _, b := range invalid {
-			if r == b {
-				isBad = true
-				break
-			}
-		}
-		if !isBad {
-			out = append(out, r)
-		}
-	}
-	return string(out)
+	d.mu.Unlock()
+	d.queueChanged()
+	return true, freed, nil
 }

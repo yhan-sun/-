@@ -1,18 +1,34 @@
-(function() {
-  console.log('[Wails Shim] Initializing electronAPI compatibility shim...');
-
-  const eventListeners = new Map();
-
-  function addListener(event, cb) {
-    if (!eventListeners.has(event)) {
-      eventListeners.set(event, new Set());
-    }
-    eventListeners.get(event).add(cb);
-    return () => {
-      const set = eventListeners.get(event);
-      if (set) set.delete(cb);
-    };
-  }
+(function () {
+  const listeners = new Map();
+  const eventMethods = {
+    onAppUpdatePreference: 'app-update-preference',
+    onAppUpdateState: 'app-update-state',
+    onDownloadCompleted: 'download-completed',
+    onDownloadFailed: 'download-failed',
+    onDownloadProgress: 'download-progress',
+    onDownloadQueueChanged: 'download-queue-changed',
+    onDownloadStopped: 'download-stopped',
+    onDownloadTaskAdded: 'download-task-added',
+    onMergeCompleted: 'merge-completed',
+    onMergeFailed: 'merge-failed',
+    onMergeProgress: 'merge-progress',
+    onMergeTaskAdded: 'merge-task-added',
+    onNavigate: 'navigate',
+    onOnlinePlayProgress: 'online-play-progress',
+    onStealthState: 'stealth-state',
+    onTranscodeProgress: 'transcode-progress',
+    onBossKeyState: 'boss-key-state',
+    onNasExportDone: 'nas-export-done',
+    onTextExportDone: 'text-export-done',
+    onAnnouncementPreferences: 'announcement-preferences-changed',
+    onInterfaceZoomChanged: 'interface-zoom-changed',
+    onStorageError: 'storage-error',
+    onWatchHistoryUpdated: 'watch-history-updated',
+    onWatchHistoryProgress: 'watch-history-progress',
+    onMediaSourcesChanged: 'media-sources-changed',
+    onAccountUpdated: 'account-updated',
+    onNativePictureInPicture: 'native-pip-changed'
+  };
 
   function emit(event, data) {
     if (event === 'navigate') {
@@ -21,369 +37,161 @@
         window.scrollTo(0, 0);
       });
     }
-    const set = eventListeners.get(event);
-    if (set) {
-      for (const cb of set) {
-        try { cb(data); } catch (e) { console.error('[Wails Shim] Event listener error:', e); }
+    for (const cb of listeners.get(event) || []) {
+      try {
+        cb(data);
+      } catch (error) {
+        console.error('[Wails] Event listener failed', event, error);
       }
     }
   }
-
   window.__emitElectronEvent = emit;
 
-  // Native window drag handler for macOS Wails
-  window.addEventListener('mousedown', function(e) {
-    if (e.button !== 0) return;
-    const target = e.target;
-    if (!target) return;
-    const noDrag = target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, .toolbar-actions');
-    if (noDrag) return;
-    const dragArea = target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"]');
-    if (dragArea) {
-      if (window.wails && window.wails.flags) {
-        window.wails.flags.deferDragToMouseMove = false;
-      }
-      if (window.WailsInvoke) {
-        window.WailsInvoke('drag');
-      }
+  let eventsConnected = false;
+  function connectEvents() {
+    if (eventsConnected || typeof window.runtime?.EventsOn !== 'function') return;
+    for (const event of Object.values(eventMethods)) {
+      window.runtime.EventsOn(event, data => emit(event, data));
     }
-  }, true);
+    eventsConnected = true;
+  }
 
-  const noopListener = (event) => (cb) => addListener(event, cb);
+  // The UI and the native bindings can start in either order.
+  let pendingApp;
+  function getApp() {
+    connectEvents();
+    if (window.go?.main?.App) return Promise.resolve(window.go.main.App);
+    if (!pendingApp) {
+      pendingApp = new Promise(resolve => {
+        const deadline = Date.now() + 4000;
+        const timer = setInterval(() => {
+          connectEvents();
+          const app = window.go?.main?.App;
+          if (app || Date.now() >= deadline) {
+            clearInterval(timer);
+            resolve(app);
+          }
+        }, 32);
+      }).finally(() => { pendingApp = undefined; });
+    }
+    return pendingApp;
+  }
 
-  const defaultProps = {
+  const names = { openExternalUrl: 'OpenExternalURL', searchSeriesMore: 'SearchSeries' };
+  async function invoke(method, args) {
+    const app = await getApp();
+    if (!app) throw new Error('桌面服务尚未就绪，请重试');
+    const name = names[method] || method[0].toUpperCase() + method.slice(1);
+    const binding = app[name] || app[method];
+    if (typeof binding !== 'function') throw new Error('当前桌面版暂不支持此功能');
+    return binding(...args);
+  }
+
+  let interfaceZoom;
+  let pendingZoomChange = Promise.resolve();
+  function updateWindowWidth() {
+    // CSS media queries keep using the unscaled viewport in WKWebView.
+    document.documentElement.classList.toggle('compact-window', window.innerWidth <= 600 * (interfaceZoom ?? 1));
+  }
+
+  function applyZoom(zoom) {
+    interfaceZoom = zoom;
+    document.documentElement.style.setProperty('--interface-zoom', zoom);
+    updateWindowWidth();
+  }
+
+  async function getSettings() {
+    const settings = await invoke('getSettings', []);
+    // A delayed startup read must not replace a more recent zoom change.
+    if (interfaceZoom === undefined) applyZoom(settings.ui_zoom ?? 1);
+    return settings;
+  }
+
+  async function changeWindowZoom(action) {
+    if (!['in', 'out', 'reset'].includes(action)) throw new Error('无法识别的缩放操作');
+    if (interfaceZoom === undefined) await getSettings();
+    const step = action === 'in' ? 0.1 : -0.1;
+    const stepped = Math.round((interfaceZoom + step) * 100) / 100;
+    const zoom = action === 'reset' ? 1 : Math.max(0.5, Math.min(2, stepped));
+    const saved = await invoke('saveSettings', [{ ui_zoom: zoom }]);
+    if (!saved?.success) throw new Error(saved?.error || '界面大小保存失败，请重试。');
+    applyZoom(saved.ui_zoom);
+    emit('interface-zoom-changed', saved.ui_zoom);
+    requestAnimationFrame(() => {
+      document.querySelector('.main-content:not([hidden]) .appearance-zoom')?.scrollIntoView({ block: 'nearest' });
+    });
+    return { success: true, zoom: saved.ui_zoom };
+  }
+
+  // These callers consume the raw value and handle a rejected Promise themselves.
+  const api = {
     platform: 'darwin',
-    onAppUpdatePreference: noopListener('app-update-preference'),
-    onAppUpdateState: noopListener('app-update-state'),
-    onDownloadCompleted: noopListener('download-completed'),
-    onDownloadFailed: noopListener('download-failed'),
-    onDownloadProgress: noopListener('download-progress'),
-    onDownloadQueueChanged: noopListener('download-queue-changed'),
-    onDownloadStopped: noopListener('download-stopped'),
-    onDownloadTaskAdded: noopListener('download-task-added'),
-    onMergeCompleted: noopListener('merge-completed'),
-    onMergeFailed: noopListener('merge-failed'),
-    onMergeProgress: noopListener('merge-progress'),
-    onMergeTaskAdded: noopListener('merge-task-added'),
-    onNavigate: noopListener('navigate'),
-    onOnlinePlayProgress: noopListener('online-play-progress'),
-    onStealthState: noopListener('stealth-state'),
-    onTranscodeProgress: noopListener('transcode-progress'),
-    onBossKeyState: noopListener('boss-key-state'),
-    onNasExportDone: noopListener('nas-export-done'),
-    onTextExportDone: noopListener('text-export-done'),
-    onAnnouncementPreferences: noopListener('announcement-preferences-changed'),
-    onInterfaceZoomChanged: noopListener('interface-zoom-changed'),
-    onStorageError: noopListener('storage-error'),
-    onWatchHistoryUpdated: noopListener('watch-history-updated'),
-    onWatchHistoryProgress: noopListener('watch-history-progress'),
-    onMediaSourcesChanged: noopListener('media-sources-changed'),
-    onAccountUpdated: noopListener('account-updated'),
-    onNativePictureInPicture: noopListener('native-pip-changed'),
+    nativePictureInPicture: false,
+    getAppInfo: async () => ({
+      version: '7.9.0', brand: '牛油果短剧', appName: '牛油果短剧', platform: 'darwin', preview: false
+    }),
+    getSeriesList: (options = {}) => invoke('getSeriesList', [options]),
+    getDownloadTasks: (options = {}) => invoke('getDownloadTasks', [options]),
+    getPlaybackPosition: seriesId => invoke('getPlaybackPosition', [seriesId]),
+    savePlaybackPosition: (...args) => invoke('savePlaybackPosition', args),
+    selectFolder: () => invoke('selectFolder', []),
+    getSettings,
+    changeWindowZoom(action) {
+      pendingZoomChange = pendingZoomChange.then(() => changeWindowZoom(action)).catch(error => ({
+        success: false, error: error?.message || String(error)
+      }));
+      return pendingZoomChange;
+    },
+    setAlwaysOnTop: on => invoke('setAlwaysOnTop', [on]),
+    getAlwaysOnTop: () => invoke('getAlwaysOnTop', []).catch(() => false),
+    getWindowLayout: () => invoke('getWindowLayout', []).catch(() => 'landscape'),
+    browseCategories: () => invoke('browseCategories', []),
+
+    // Read models for features with no native provider in this build.
+    getMergeTasks: async () => [],
+    getPublicDetails: async () => ({ success: true, details: null }),
+    getAppUpdateState: async () => ({ checking: false, available: false, downloaded: false, error: null }),
+    getBossKeyState: async () => ({ enabled: false, registered: false }),
+    getCurrentAnnouncement: async () => ({ visible: false, announcement: null })
   };
 
-  // Connect Wails runtime events to shim listeners when runtime is available
-  function hookWailsRuntime() {
-    if (window.runtime && typeof window.runtime.EventsOn === 'function') {
-      const events = [
-        'download-progress', 'download-completed', 'download-failed',
-        'download-task-added', 'download-stopped', 'download-queue-changed',
-        'watch-history-updated', 'watch-history-progress', 'navigate'
-      ];
-      for (const ev of events) {
-        window.runtime.EventsOn(ev, (data) => emit(ev, data));
-      }
-      console.log('[Wails Shim] Connected to Wails runtime event system.');
-    } else {
-      setTimeout(hookWailsRuntime, 80);
-    }
-  }
-  hookWailsRuntime();
-
-  // Async resolver for Wails App binding
-  let wailsAppPromise = null;
-  function getWailsApp() {
-    if (window.go && window.go.main && window.go.main.App) {
-      return Promise.resolve(window.go.main.App);
-    }
-    if (!wailsAppPromise) {
-      wailsAppPromise = new Promise((resolve) => {
-        const startTime = Date.now();
-        const interval = setInterval(() => {
-          if (window.go && window.go.main && window.go.main.App) {
-            clearInterval(interval);
-            resolve(window.go.main.App);
-          } else if (Date.now() - startTime > 4000) {
-            clearInterval(interval);
-            console.warn('[Wails Shim] Timed out waiting for window.go.main.App');
-            resolve(null);
-          }
-        }, 16);
-      });
-    }
-    return wailsAppPromise;
+  for (const [method, event] of Object.entries(eventMethods)) {
+    const callbacks = new Set();
+    listeners.set(event, callbacks);
+    api[method] = cb => {
+      callbacks.add(cb);
+      connectEvents();
+      return () => callbacks.delete(cb);
+    };
   }
 
-  const defaultSettings = {
-    root: '',
-    download_path: '',
-    name_format: '剧名 集数',
-    max_concurrent: 3,
-    ui_zoom: 1,
-    download_quality: 'auto',
-    download_metadata: false,
-    custom_sources: [],
-    auto_delete_watched: false,
-    compat_mode: true,
-    fast_conversion: false,
-    cache_next_episode: true,
-    picture_in_picture_mode: 'custom',
-    app_updates_enabled: false,
-    watch_updates_enabled: true,
-    watch_sequels_enabled: true,
-    proxy_enabled: false,
-    proxy_mode: 'system',
-    proxy_host: '127.0.0.1',
-    proxy_port: 7890,
-    proxy_username: '',
-    proxy_password: '',
-    proxy_password_set: false,
-    theme: 'system'
-  };
-
-  window.electronAPI = new Proxy(defaultProps, {
-    get(target, prop) {
-      if (prop in target) {
-        return target[prop];
-      }
+  window.electronAPI = new Proxy(api, {
+    get(target, method) {
+      if (Object.hasOwn(target, method)) return target[method];
+      if (typeof method !== 'string' || method === 'then') return undefined;
+      // Most legacy component actions inspect result.success and render result.error.
       return async (...args) => {
-        // Critical custom interceptor: playSeries
-        if (prop === 'playSeries') {
-          const payload = args[0] || {};
-          let res = { success: true };
-          const app = await getWailsApp();
-          if (app && typeof app.PlaySeries === 'function') {
-            try {
-              res = await app.PlaySeries(payload);
-            } catch (err) {
-              console.error('[Wails Shim] PlaySeries backend error:', err);
-              res = { success: false, error: err.message || String(err) };
-            }
-          }
-          if (res && res.success) {
-            emit('navigate', { page: 'player', payload });
-          }
-          return res;
+        try {
+          return await invoke(method, args);
+        } catch (error) {
+          return { success: false, error: error?.message || String(error) };
         }
-
-        if (prop === 'getSeriesList') {
-          const app = await getWailsApp();
-          if (app && typeof app.GetSeriesList === 'function') {
-            try {
-              const list = await app.GetSeriesList();
-              return list || [];
-            } catch (e) {
-              console.error('[Wails Shim] GetSeriesList error:', e);
-              return [];
-            }
-          }
-          return [];
-        }
-
-        if (prop === 'getSeriesEpisodes') {
-          const app = await getWailsApp();
-          if (app && typeof app.GetSeriesEpisodes === 'function') {
-            try {
-              return await app.GetSeriesEpisodes(...args);
-            } catch (e) {
-              return { success: false, error: e.message || String(e) };
-            }
-          }
-          return { success: false, error: '后端未就绪' };
-        }
-
-        if (prop === 'searchResolve') {
-          const app = await getWailsApp();
-          if (app && typeof app.SearchResolve === 'function') {
-            try {
-              return await app.SearchResolve(...args);
-            } catch (e) {
-              return { success: false, error: e.message || String(e) };
-            }
-          }
-          return { success: false, error: '后端未就绪' };
-        }
-
-        if (prop === 'prepareOnlinePlay') {
-          const app = await getWailsApp();
-          if (app && typeof app.PrepareOnlinePlay === 'function') {
-            try {
-              return await app.PrepareOnlinePlay(...args);
-            } catch (e) {
-              return { success: false, error: e.message || String(e) };
-            }
-          }
-          return { success: false, error: '后端未就绪' };
-        }
-
-        if (prop === 'getAppInfo') {
-          return {
-            version: '7.9.0',
-            brand: '牛油果短剧',
-            appName: '牛油果短剧',
-            platform: 'darwin',
-            preview: false
-          };
-        }
-
-        if (prop === 'getAccountStatus') {
-          return {
-            success: true,
-            signedIn: false,
-            account: null,
-            error: ''
-          };
-        }
-
-        if (prop === 'logoutAccount' || prop === 'cancelAccountLogin') {
-          return { success: true };
-        }
-
-        if (prop === 'getMergeTasks') {
-          return [];
-        }
-
-        if (prop === 'getPublicDetails') {
-          return { success: true, details: null };
-        }
-
-        if (prop === 'getSettings') {
-          const app = await getWailsApp();
-          if (app && typeof app.GetSettings === 'function') {
-            try {
-              const s = await app.GetSettings();
-              if (s) return s;
-            } catch (e) {
-              console.error('[Wails Shim] GetSettings error:', e);
-            }
-          }
-          return defaultSettings;
-        }
-
-        if (prop === 'getStorageUsage') {
-          const app = await getWailsApp();
-          if (app && typeof app.GetStorageUsage === 'function') {
-            try {
-              const st = await app.GetStorageUsage();
-              if (st) return st;
-            } catch (e) {
-              console.error('[Wails Shim] GetStorageUsage error:', e);
-            }
-          }
-          return { success: true, total: 0, used: 0, totalFiles: 0, totalBytes: 0, series: [] };
-        }
-
-        if (prop === 'compatCacheStatus' || prop === 'onlineCacheStatus') {
-          return { success: true, files: 0, bytes: 0 };
-        }
-
-        if (prop === 'getSeriesProgress') {
-          return { success: true, progress: {}, pending: [] };
-        }
-
-        if (prop === 'warmSeriesProgress') {
-          return { success: true, progress: { downloaded: 0, total: 0 } };
-        }
-
-        if (prop === 'getAppUpdateState') {
-          return { checking: false, available: false, downloaded: false, error: null };
-        }
-
-        if (prop === 'getBossKeyState') {
-          return { enabled: false, registered: false };
-        }
-
-        if (prop === 'getCurrentAnnouncement') {
-          return { visible: false, announcement: null };
-        }
-
-        if (prop === 'openExternalUrl') {
-          const app = await getWailsApp();
-          const url = args[0] || '';
-          if (app && typeof app.OpenExternalURL === 'function') {
-            return await app.OpenExternalURL(url);
-          }
-          window.open(url, '_blank');
-          return { success: true };
-        }
-
-        // Generic dispatch to Wails App
-        const app = await getWailsApp();
-        if (app) {
-          if (typeof app[prop] === 'function') {
-            try {
-              return await app[prop](...args);
-            } catch (e) {
-              console.error(`[Wails Shim] Error calling App.${String(prop)}:`, e);
-              return { success: false, error: e.message || String(e) };
-            }
-          }
-          const pascal = prop.charAt(0).toUpperCase() + prop.slice(1);
-          if (typeof app[pascal] === 'function') {
-            try {
-              return await app[pascal](...args);
-            } catch (e) {
-              console.error(`[Wails Shim] Error calling App.${pascal}:`, e);
-              return { success: false, error: e.message || String(e) };
-            }
-          }
-        }
-
-        console.warn(`[Wails Shim] Call to unhandled method: ${String(prop)}`, args);
-
-        if (prop === 'browseCategories') {
-          return [
-            { slug: 'real-drama', label: '真人剧' },
-            { slug: 'hot-drama', label: '热播总榜' },
-            { slug: 'comic-drama', label: '动态漫剧' }
-          ];
-        }
-
-        if (prop === 'browseList') {
-          return { success: true, results: [], total: 0, totalPages: 0 };
-        }
-
-        if (prop === 'getMediaSources') {
-          return {
-            success: true,
-            sources: [
-              { id: 'hongguo', label: '牛油果短剧', enabled: true },
-              { id: 'xifan', label: '西饭短剧', enabled: true },
-              { id: 'hema', label: '河马短剧', enabled: true }
-            ]
-          };
-        }
-
-        if (prop === 'getCustomSources') {
-          return { success: true, sources: [] };
-        }
-
-        if (prop === 'getWindowLayout') {
-          return 'landscape';
-        }
-
-        if (prop === 'getQueueStatus') {
-          return { active: 0, queued: 0 };
-        }
-
-        if (prop === 'getDownloadTasks') {
-          return [];
-        }
-
-        return { success: true };
       };
     }
   });
 
-  console.log('[Wails Shim] electronAPI shim ready.');
+  window.addEventListener('resize', updateWindowWidth);
+  updateWindowWidth();
+  // Restore the saved size on launch, including when the first page is the catalog.
+  getSettings().catch(() => {}); // Later settings reads retry after the desktop service is ready.
+
+  // Older WebViews need the native drag message for the custom title bar.
+  window.addEventListener('mousedown', event => {
+    if (event.button !== 0 || !event.target?.closest) return;
+    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, .toolbar-actions')) return;
+    if (event.target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"]')) {
+      if (window.wails?.flags) window.wails.flags.deferDragToMouseMove = false;
+      window.WailsInvoke?.('drag');
+    }
+  }, true);
 })();

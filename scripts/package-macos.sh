@@ -5,7 +5,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
 echo "=== Building Niuyouguo Player (Go + Wails with production tags) ==="
-/Users/pyu/env/go/bin/go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/niuyouguo-player" .
+mkdir -p bin
+go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/niuyouguo-player" .
 
 APP_NAME="牛油果短剧"
 APP_BUNDLE="bin/${APP_NAME}.app"
@@ -39,8 +40,6 @@ cat << 'EOF' > "${CONTENTS}/Info.plist"
     <string>7.9.0</string>
     <key>CFBundleExecutable</key>
     <string>niuyouguo-player</string>
-    <key>CFBundleIconFile</key>
-    <string>appicon</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>
@@ -51,7 +50,7 @@ cat << 'EOF' > "${CONTENTS}/Info.plist"
 </plist>
 EOF
 
-ICON_SOURCE="/Users/pyu/code/UU an/hongguo-drama/build/icon.png"
+ICON_SOURCE="${ICON_SOURCE:-$DIR/build/icon.png}"
 if [ -f "$ICON_SOURCE" ]; then
     echo "=== Generating ICNS icon ==="
     ICONSET="bin/app.iconset"
@@ -70,6 +69,7 @@ if [ -f "$ICON_SOURCE" ]; then
     sips -z 1024 1024 "$ICON_SOURCE" --out "${ICONSET}/icon_512x512@2x.png" >/dev/null
 
     iconutil -c icns "${ICONSET}" -o "${RESOURCES}/appicon.icns"
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string appicon" "${CONTENTS}/Info.plist"
     rm -rf "${ICONSET}"
 fi
 
@@ -78,7 +78,7 @@ codesign --force --deep --sign - "${APP_BUNDLE}"
 xattr -cr "${APP_BUNDLE}"
 
 echo "=== Packaging DMG ==="
-DMG_PATH="bin/${APP_NAME}-7.9.0-arm64.dmg"
+DMG_PATH="bin/${APP_NAME}-7.9.0-$(go env GOARCH).dmg"
 rm -f "${DMG_PATH}"
 hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_BUNDLE}" -ov -format UDZO "${DMG_PATH}"
 xattr -cr "${DMG_PATH}"

@@ -14,7 +14,8 @@
   - 完美支持横屏/竖屏切换
   - 原生支持 macOS 顶部拖动、无边框与置顶画中画模式
   - 智能分集列表与断点播放续播
-- **多通道批量下载**：内置原生并发下载调度引擎，支持多任务队列、分片重试、网络断线自愈与本地持久化。
+- **批量下载**：可调整并发数、暂停和手动重试。任务队列保存在本次会话中，下载文件保存在所选目录。
+- **红果账号**：从侧栏打开红果官网，在独立窗口内使用官网提供的验证码或扫码登录，也可选择默认浏览器。登录结果在对应窗口内查看。桌面播放器的观看记录保存在本机。
 - **现代化 UI**：保留完整的 Fluent / 毛玻璃视觉风格、平滑动画与主题自适应。
 
 ## 架构说明
@@ -24,19 +25,21 @@
   - `pkg/crypto`: Gorgon / Helios / Medusa / HMAC 签名与安全校验
   - `pkg/downloader`: 并发下载器
   - `pkg/storage`: 本地观看历史、状态与配置持久化 (`~/.niuyouguo`)
-- **前端**：现代 React 界面，通过 Wails IPC 与 Go 后端原生直通
-- **打包**：原生 Universal / ARM64 macOS `.app` 与 `.dmg` 镜像构建
+- **前端**：仓库包含已编译的 React 界面，入口位于 `frontend/dist/index.html`。`shim.js` 适配 Wails 方法与事件，`desktop-layout.css` 维护桌面窗口布局。
+- **打包**：当前编译架构的 macOS `.app` 与 `.dmg` 镜像构建
 
 ## 构建与运行
 
 ### 依赖环境
-- Go 1.22+
+- Go 1.23.6+
+- Node.js 18+（运行前端桥接测试）
 - macOS 11.0+ (Apple Silicon / Intel)
 
 ### 本地编译
 ```bash
-# 运行单元测试
-go test ./...
+# 离线单元测试（Go 包中另有依赖外部片源的集成测试）
+go test -race ./... -skip 'Live|TestLandpageAndResolve'
+node --test frontend/shim.test.cjs
 
 # 编译二进制
 go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/niuyouguo-player" .

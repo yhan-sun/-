@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -69,7 +70,9 @@ func extractRouterData(html string) (map[string]interface{}, error) {
 			depth--
 			if depth == 0 {
 				var data map[string]interface{}
-				if err := json.Unmarshal([]byte(html[start:i+1]), &data); err != nil {
+				decoder := json.NewDecoder(strings.NewReader(html[start : i+1]))
+				decoder.UseNumber()
+				if err := decoder.Decode(&data); err != nil {
 					return nil, fmt.Errorf("failed to unmarshal router data: %w", err)
 				}
 				return data, nil
@@ -157,17 +160,16 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 		}
 
 		sid, _ := detail["series_id"].(string)
+		if n, ok := detail["series_id"].(json.Number); ok {
+			sid = n.String()
+		}
 		if sid == "" {
-			if n, ok := detail["series_id"].(float64); ok {
-				sid = fmt.Sprintf("%.0f", n)
-			}
+			lastErr = fmt.Errorf("missing series_id in page data")
+			continue
 		}
 		seriesTitle, _ := detail["series_name"].(string)
 		cover, _ := detail["series_cover"].(string)
-		accessibleCnt := 0
-		if n, ok := detail["accessible_episode_cnt"].(float64); ok {
-			accessibleCnt = int(n)
-		}
+		accessibleCnt, countErr := strconv.Atoi(fmt.Sprint(detail["accessible_episode_cnt"]))
 
 		vidListRaw, _ := detail["vid_list"].([]interface{})
 		if len(vidListRaw) == 0 {
@@ -186,6 +188,7 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 				SeriesTitle:  seriesTitle,
 				Cover:        cover,
 				WebAvailable: i < accessibleCnt,
+				Locked:       countErr == nil && accessibleCnt >= 0 && i >= accessibleCnt,
 			}
 		}
 

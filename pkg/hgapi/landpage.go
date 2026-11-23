@@ -172,6 +172,10 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 		return nil, fmt.Errorf("read landpage body: %w", err)
 	}
 
+	return decodeCatalogPage(respBytes)
+}
+
+func decodeCatalogPage(respBytes []byte) (*CatalogResult, error) {
 	var raw struct {
 		Code int `json:"code"`
 		Data struct {
@@ -201,6 +205,10 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 		return nil, fmt.Errorf("unmarshal landpage response: %w", err)
 	}
 
+	if raw.Code != 0 {
+		return nil, fmt.Errorf("目录返回错误码 %d", raw.Code)
+	}
+
 	var items []DramaCatalogItem
 	seen := make(map[string]bool)
 
@@ -219,17 +227,12 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 		}
 		seen[sid] = true
 
-		// Status
-		status := "completed"
-		switch st := v.VideoDetail.SeriesStatus.(type) {
-		case json.Number:
-			if n, err := st.Int64(); err == nil && n == 0 {
-				status = "ongoing"
-			}
-		case float64:
-			if int(st) == 0 {
-				status = "ongoing"
-			}
+		status := ""
+		switch fmt.Sprint(v.VideoDetail.SeriesStatus) {
+		case "0", "ongoing":
+			status = "ongoing"
+		case "1", "completed":
+			status = "completed"
 		}
 
 		// Heat / play count
@@ -253,9 +256,6 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 			} else if pc > 0 {
 				heat = fmt.Sprintf("热度 %.0f", pc)
 			}
-		}
-		if heat == "" {
-			heat = "热度 9.8万"
 		}
 
 		// Score
@@ -285,14 +285,6 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 				}
 			}
 		}
-		if len(tags) == 0 {
-			if genre == "comic_series" {
-				tags = []string{"动态漫", "热播"}
-			} else {
-				tags = []string{"热播", "独家"}
-			}
-		}
-
 		intro := v.VideoDetail.SeriesIntro
 		if intro == "" {
 			intro = v.VideoDesc
@@ -309,8 +301,9 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 		case int:
 			epCount = ec
 		}
-		if epCount <= 0 {
-			epCount = 1
+		episodeLabel := ""
+		if epCount > 0 {
+			episodeLabel = fmt.Sprintf("%d 集", epCount)
 		}
 
 		items = append(items, DramaCatalogItem{
@@ -318,7 +311,7 @@ func FetchCategoryLandpage(ctx context.Context, genre string, offset, limit int,
 			SeriesTitle:      strings.TrimSpace(v.Title),
 			Cover:            v.Cover,
 			EpisodeCount:     epCount,
-			EpisodeLabel:     fmt.Sprintf("%d 集", epCount),
+			EpisodeLabel:     episodeLabel,
 			CompletionStatus: status,
 			Heat:             heat,
 			Score:            scoreStr,

@@ -1,0 +1,122 @@
+/* A percentage height stays inside the native window at every CSS zoom level. */
+:root {
+  zoom: var(--interface-zoom, 1);
+}
+
+.app-layout {
+  height: 100%;
+}
+
+/* Keep the stage reachable when the controls take more than one screen. */
+.layout-portrait.player-focused:not(.stealth-mode) .main-content[data-page=player] {
+  position: relative;
+  overflow-y: auto;
+}
+
+.layout-portrait:not(.stealth-mode) .player-viewing-layout {
+  min-height: 180px;
+}
+
+/* Window-fill uses the space below the toolbar, including after it wraps. */
+.layout-portrait.player-focused .main-content[data-page=player]:has(.player-window-fill) {
+  overflow: clip;
+}
+
+.layout-portrait .player-stage.player-window-fill:not(:fullscreen) {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+}
+
+/* Expand the download actions in place when the toolbar needs multiple rows. */
+@media (max-width: 760px) {
+  .dm-more-actions {
+    max-width: 100%;
+  }
+
+  .dm-more-actions summary {
+    width: fit-content;
+  }
+
+  .dm-more-menu {
+    position: static;
+    max-width: 100%;
+    margin-top: 6px;
+  }
+}
+
+/* A manually narrowed desktop window can use the existing compact navigation. */
+.compact-window .layout-landscape .sidebar,
+.compact-window .layout-landscape .toolbar-caption {
+  display: none;
+}
+
+.compact-window .layout-landscape .compact-navigation {
+  display: grid;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.compact-window .compact-navigation {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 56px), 1fr));
+}
+
+.layout-portrait.platform-mac .window-toolbar,
+.compact-window .layout-landscape.platform-mac .window-toolbar {
+  padding-left: calc(104px / var(--interface-zoom, 1));
+}
+
+.compact-window .browse-container .browse-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.compact-window .browse-header .page-description {
+  display: none;
+}
+
+.compact-window .browse-container .browse-header-right {
+  justify-content: flex-start;
+}
+
+.compact-window .browse-container .source-control {
+  max-width: 100%;
+}
+
+.compact-window .browse-container .source-control select {
+  min-width: 0;
+}
+
+.compact-window .browse-container .browse-source-note,
+.compact-window .browse-container .browse-cats,
+.compact-window .browse-container .browse-genres {
+  margin-bottom: 8px;
+}
+
+/* Leave space for the macOS window controls and wrap the player actions. */
+.compact-window .player-focused .window-toolbar {
+  height: auto;
+  min-height: 48px;
+  padding-block: 6px;
+  flex-wrap: wrap;
+}
+
+.compact-window .player-focused .toolbar-page-picker {
+  flex: 0 1 88px;
+}
+
+.compact-window .player-focused .toolbar-actions {
+  flex: 1 1 160px;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.account-page .account-card + .account-card {
+  margin-top: 16px;
+}
