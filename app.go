@@ -116,14 +116,38 @@ func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, 
 func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 	a.mu.Lock()
 	cached, ok := a.seriesMap[seriesID]
+	dev := a.dev
 	a.mu.Unlock()
 	if ok && cached != nil {
 		return cached, nil
 	}
 
-	detail, err := hgapi.FetchSeriesEpisodes(a.ctx, seriesID)
-	if err != nil {
-		return nil, err
+	if dev == nil {
+		var err error
+		dev, err = device.RegisterDevice()
+		if err == nil {
+			a.mu.Lock()
+			a.dev = dev
+			a.registered = true
+			a.mu.Unlock()
+		}
+	}
+
+	var detail *hgapi.SeriesDetail
+	var err error
+
+	if dev != nil {
+		detail, err = hgapi.FetchVideoDetail(a.ctx, seriesID, dev)
+		if err != nil {
+			log.Printf("[App] FetchVideoDetail failed: %v, falling back to web", err)
+		}
+	}
+
+	if detail == nil {
+		detail, err = hgapi.FetchSeriesEpisodes(a.ctx, seriesID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	a.mu.Lock()
@@ -566,6 +590,46 @@ func (a *App) OpenExternalURL(targetURL string) (interface{}, error) {
 	return map[string]interface{}{"success": true}, nil
 }
 
+var catalogGenres = []map[string]interface{}{
+	{"slug": "hot", "label": "热播"},
+	{"slug": "urban", "label": "都市"},
+	{"slug": "counterattack", "label": "逆袭"},
+	{"slug": "godofwar", "label": "战神"},
+	{"slug": "costume", "label": "古装"},
+	{"slug": "sweet", "label": "甜宠"},
+	{"slug": "angst", "label": "虐恋"},
+	{"slug": "fantasy", "label": "玄幻"},
+	{"slug": "tycoon", "label": "神豪"},
+	{"slug": "rebirth", "label": "重生"},
+	{"slug": "traversal", "label": "穿越"},
+	{"slug": "doctor", "label": "神医"},
+	{"slug": "soninlaw", "label": "赘婿"},
+	{"slug": "disguise", "label": "马甲"},
+	{"slug": "baby", "label": "萌宝"},
+	{"slug": "suspense", "label": "悬疑"},
+	{"slug": "comic", "label": "动漫"},
+}
+
+var genreSlugToKeyword = map[string]string{
+	"hot":           "热播",
+	"urban":         "都市",
+	"counterattack": "逆袭",
+	"godofwar":      "战神",
+	"costume":       "古装",
+	"sweet":         "甜宠",
+	"angst":         "虐恋",
+	"fantasy":       "玄幻",
+	"tycoon":        "神豪",
+	"rebirth":       "重生",
+	"traversal":     "穿越",
+	"doctor":        "神医",
+	"soninlaw":      "赘婿",
+	"disguise":      "马甲",
+	"baby":          "萌宝",
+	"suspense":      "悬疑",
+	"comic":         "动漫",
+}
+
 // BrowseCategories returns category tabs
 func (a *App) BrowseCategories() (interface{}, error) {
 	return []map[string]interface{}{
@@ -575,7 +639,7 @@ func (a *App) BrowseCategories() (interface{}, error) {
 	}, nil
 }
 
-// BrowseList returns catalog list populated from live search
+// BrowseList returns catalog list populated from official landpage API or live search
 func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 	a.mu.Lock()
 	dev := a.dev
@@ -588,6 +652,7 @@ func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 			return map[string]interface{}{
 				"success":    true,
 				"results":    []interface{}{},
+				"genres":     catalogGenres,
 				"total":      0,
 				"totalPages": 0,
 			}, nil
@@ -598,58 +663,122 @@ func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 		a.mu.Unlock()
 	}
 
-	keyword := "热播"
-	if cat, ok := options["category"].(string); ok && cat != "" {
-		switch cat {
-		case "comic-drama", "hot-comic-drama":
-			keyword = "动漫"
-		case "hot-drama":
-			keyword = "热播"
-		case "hot-real-drama", "real-drama":
-			keyword = "短剧"
-		case "hot-ai-drama":
-			keyword = "都市"
-		default:
-			keyword = "短剧"
-		}
-	}
-
 	page := 1
 	if p, ok := options["page"].(float64); ok && p > 0 {
 		page = int(p)
 	}
 
-	items, err := hgapi.Search(keyword, page, dev)
-	if err != nil {
-		return map[string]interface{}{
-			"success":    true,
-			"results":    []interface{}{},
-			"total":      0,
-			"totalPages": 0,
-		}, nil
+	category, _ := options["category"].(string)
+	genre, _ := options["genre"].(string)
+
+	var results []map[string]interface{}
+	var totalPages int = 5
+	var total int = 100
+	var hasMore bool = true
+
+	// Use official landpage API when genre is empty or "hot"/"all"
+	if genre == "" || genre == "all" || genre == "hot" {
+		genreParam := "default"
+		switch category {
+		case "comic-drama", "hot-comic-drama":
+			genreParam = "comic_series"
+		case "hot-ai-drama", "ai-drama":
+			genreParam = "ai_series"
+		default:
+			genreParam = "default"
+		}
+
+		offset := (page - 1) * 20
+		catRes, err := hgapi.FetchCategoryLandpage(a.ctx, genreParam, offset, 20, dev)
+		if err == nil && catRes != nil && len(catRes.Items) > 0 {
+			results = make([]map[string]interface{}, len(catRes.Items))
+			for i, it := range catRes.Items {
+				results[i] = map[string]interface{}{
+					"series_id":         it.SeriesID,
+					"series_title":      it.SeriesTitle,
+					"cover":             it.Cover,
+					"episode_count":     it.EpisodeCount,
+					"episode_label":     it.EpisodeLabel,
+					"completion_status": it.CompletionStatus,
+					"heat":              it.Heat,
+					"score":             it.Score,
+					"tags":              it.Tags,
+					"description":       it.Description,
+				}
+			}
+			hasMore = catRes.HasMore
+			totalPages = 10
+			total = 200
+		}
 	}
 
-	results := make([]map[string]interface{}, len(items))
-	for i, it := range items {
-		results[i] = map[string]interface{}{
-			"series_id":         it.SeriesID,
-			"series_title":      it.SeriesTitle,
-			"cover":             it.Cover,
-			"episode_count":     it.EpisodeCount,
-			"episode_label":     fmt.Sprintf("%d 集", it.EpisodeCount),
-			"completion_status": "completed",
-			"heat":              "热度 9.8万",
-			"tags":              []string{"热播", "独家"},
+	// Fallback or specific genre search
+	if len(results) == 0 {
+		keyword := "热播"
+		if kw, ok := genreSlugToKeyword[genre]; ok && kw != "" {
+			keyword = kw
+		} else if genre != "" {
+			keyword = genre
+		} else {
+			switch category {
+			case "comic-drama", "hot-comic-drama":
+				keyword = "动漫"
+			case "hot-drama":
+				keyword = "热播"
+			default:
+				keyword = "短剧"
+			}
 		}
+
+		items, err := hgapi.Search(keyword, page, dev)
+		if err == nil && len(items) > 0 {
+			// If fewer than 20 items and page 1, fetch page 2 to fill up to 20
+			if len(items) < 20 {
+				more, _ := hgapi.Search(keyword, page+1, dev)
+				seen := make(map[string]bool)
+				for _, it := range items {
+					seen[it.SeriesID] = true
+				}
+				for _, it := range more {
+					if !seen[it.SeriesID] && len(items) < 20 {
+						seen[it.SeriesID] = true
+						items = append(items, it)
+					}
+				}
+			}
+
+			results = make([]map[string]interface{}, len(items))
+			for i, it := range items {
+				results[i] = map[string]interface{}{
+					"series_id":         it.SeriesID,
+					"series_title":      it.SeriesTitle,
+					"cover":             it.Cover,
+					"episode_count":     it.EpisodeCount,
+					"episode_label":     fmt.Sprintf("%d 集", it.EpisodeCount),
+					"completion_status": "completed",
+					"heat":              "热度 9.8万",
+					"tags":              []string{"热播", "独家"},
+					"description":       it.Description,
+				}
+			}
+			totalPages = 5
+			total = 100
+			hasMore = len(results) >= 20
+		}
+	}
+
+	if results == nil {
+		results = []map[string]interface{}{}
 	}
 
 	return map[string]interface{}{
 		"success":    true,
 		"results":    results,
-		"total":      len(results),
-		"totalPages": 5,
-		"hasMore":    len(results) >= 20,
-		"sourceUrl":  "https://hongguoduanju.com/category/real-drama",
+		"genres":     catalogGenres,
+		"total":      total,
+		"totalPages": totalPages,
+		"hasMore":    hasMore,
+		"sourceUrl":  "https://hongguoduanju.com/category/" + category,
 	}, nil
 }
 

@@ -15,6 +15,12 @@
   }
 
   function emit(event, data) {
+    if (event === 'navigate') {
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.main-content').forEach(el => { el.scrollTop = 0; });
+        window.scrollTo(0, 0);
+      });
+    }
     const set = eventListeners.get(event);
     if (set) {
       for (const cb of set) {
@@ -24,6 +30,24 @@
   }
 
   window.__emitElectronEvent = emit;
+
+  // Native window drag handler for macOS Wails
+  window.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    const target = e.target;
+    if (!target) return;
+    const noDrag = target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, .toolbar-actions');
+    if (noDrag) return;
+    const dragArea = target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"]');
+    if (dragArea) {
+      if (window.wails && window.wails.flags) {
+        window.wails.flags.deferDragToMouseMove = false;
+      }
+      if (window.WailsInvoke) {
+        window.WailsInvoke('drag');
+      }
+    }
+  }, true);
 
   const noopListener = (event) => (cb) => addListener(event, cb);
 

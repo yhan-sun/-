@@ -16,8 +16,17 @@
       .sidebar-brand,
       .window-toolbar,
       .stealth-toolbar {
-        --wails-draggable: drag;
-        -webkit-app-region: drag;
+        --wails-draggable: drag !important;
+        -webkit-app-region: drag !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+      }
+      .window-toolbar > span,
+      .window-toolbar > h1,
+      .toolbar-location,
+      .toolbar-caption {
+        --wails-draggable: drag !important;
+        -webkit-app-region: drag !important;
       }
       button, button *,
       input, select, textarea,
@@ -25,9 +34,36 @@
       .btn, .btn *,
       [role="button"], [role="button"] *,
       .no-drag, .no-drag *,
+      .toolbar-actions,
+      .toolbar-actions *,
       [style*="-webkit-app-region: no-drag"], [style*="-webkit-app-region: no-drag"] * {
         --wails-draggable: no-drag !important;
         -webkit-app-region: no-drag !important;
+      }
+
+      /* 界面视口与底部防遮挡布局修复 */
+      .main-content {
+        padding: 24px 32px 80px !important;
+        box-sizing: border-box !important;
+        scroll-behavior: smooth;
+      }
+      .browse-container {
+        min-height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+      }
+      .browse-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+        gap: 20px 16px !important;
+        margin-bottom: 28px !important;
+      }
+      .browse-pager {
+        padding-bottom: 40px !important;
+        margin-top: auto !important;
+      }
+      .browse-drawer-mask {
+        z-index: 9999 !important;
       }
     </style>
     <script src="./shim.js"></script>

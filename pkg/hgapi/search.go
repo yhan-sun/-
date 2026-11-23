@@ -1,6 +1,7 @@
 package hgapi
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -192,7 +193,9 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 	}
 
 	var raw map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(bodyBytes))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("unmarshal search response: %w", err)
 	}
 
@@ -214,8 +217,16 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 		if !ok {
 			continue
 		}
-		tabType, _ := tab["tab_type"].(float64)
-		if int(tabType) != 11 {
+		var tabType int
+		switch tt := tab["tab_type"].(type) {
+		case json.Number:
+			if n, err := tt.Int64(); err == nil {
+				tabType = int(n)
+			}
+		case float64:
+			tabType = int(tt)
+		}
+		if tabType != 11 {
 			continue
 		}
 
@@ -243,6 +254,8 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 
 				var seriesID string
 				switch sid := video["series_id"].(type) {
+				case json.Number:
+					seriesID = sid.String()
 				case string:
 					seriesID = sid
 				case float64:
@@ -260,7 +273,12 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 				}
 				cover, _ := video["cover"].(string)
 				var epCount int
-				if cnt, ok := video["episode_cnt"].(float64); ok {
+				switch cnt := video["episode_cnt"].(type) {
+				case json.Number:
+					if n, err := cnt.Int64(); err == nil {
+						epCount = int(n)
+					}
+				case float64:
 					epCount = int(cnt)
 				}
 
