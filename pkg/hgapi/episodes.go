@@ -24,6 +24,7 @@ type Episode struct {
 	SeriesTitle  string `json:"series_title"`
 	Cover        string `json:"cover"`
 	WebAvailable bool   `json:"web_available"`
+	Locked       bool   `json:"locked"`
 }
 
 type SeriesDetail struct {

@@ -155,6 +155,16 @@ func (p *Proxy) setCached(key string, data []byte) {
 }
 
 func (p *Proxy) handleStream(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type, Accept, Origin")
+	w.Header().Set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	path := strings.TrimPrefix(r.URL.Path, "/stream/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {

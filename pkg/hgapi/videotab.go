@@ -105,8 +105,12 @@ func FetchVideoTabPlayModel(ctx context.Context, vid string, dev *crypto.DeviceI
 		return nil, fmt.Errorf("read video_tab body: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("video_tab HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
 	if len(bodyBytes) == 0 {
-		return nil, errors.New("EMPTY_RESPONSE from video_tab")
+		return nil, fmt.Errorf("EMPTY_RESPONSE from video_tab (status=%d, headers=%v, url=%s)", resp.StatusCode, resp.Header, signedURL)
 	}
 
 	var root map[string]interface{}

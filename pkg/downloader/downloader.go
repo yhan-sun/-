@@ -80,7 +80,11 @@ func (d *Downloader) SetDestDir(dir string) {
 	d.destDir = dir
 }
 
-func (d *Downloader) AddTask(seriesID, seriesTitle, vid, title string, vidIndex int) *DownloadTask {
+func (d *Downloader) SetSaveDir(dir string) {
+	d.SetDestDir(dir)
+}
+
+func (d *Downloader) AddTask(seriesID, seriesTitle, vid, title string, vidIndex int, quality ...string) *DownloadTask {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -323,6 +327,73 @@ func (d *Downloader) GetStatus() (active, queued int) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.active, len(d.queue)
+}
+
+func (d *Downloader) GetQueueStatus() map[string]interface{} {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return map[string]interface{}{
+		"active": d.active,
+		"queued": len(d.queue),
+	}
+}
+
+func (d *Downloader) PauseAll() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, task := range d.tasks {
+		if task.Status == StatusDownloading || task.Status == StatusPending {
+			if task.cancel != nil {
+				task.cancel()
+			}
+			task.Status = StatusStopped
+		}
+	}
+	d.queue = nil
+}
+
+func (d *Downloader) ResumeAll() {
+	d.mu.Lock()
+	for id, task := range d.tasks {
+		if task.Status == StatusStopped || task.Status == StatusFailed {
+			task.Status = StatusPending
+			task.Error = ""
+			d.queue = append(d.queue, id)
+		}
+	}
+	d.mu.Unlock()
+	go d.pump()
+}
+
+func (d *Downloader) RetryTask(taskID string) {
+	d.mu.Lock()
+	if task, ok := d.tasks[taskID]; ok {
+		task.Status = StatusPending
+		task.Error = ""
+		d.queue = append(d.queue, taskID)
+	}
+	d.mu.Unlock()
+	go d.pump()
+}
+
+func (d *Downloader) DeleteTask(taskID string, deleteDisk bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	task, ok := d.tasks[taskID]
+	if !ok {
+		return
+	}
+
+	if task.cancel != nil {
+		task.cancel()
+	}
+
+	if deleteDisk && task.SavePath != "" {
+		_ = os.Remove(task.SavePath)
+	}
+
+	delete(d.tasks, taskID)
 }
 
 func formatSpeed(bytesPerSec float64) string {
