@@ -158,3 +158,42 @@
   min-height: 48px !important;
   box-sizing: border-box !important;
 }
+
+/* Polished UI/UX: Elegant card hover lift, native thin scrollbars & font smoothing */
+* {
+  -webkit-font-smoothing: antialiased !important;
+}
+
+::selection {
+  background: rgba(229, 57, 53, 0.25) !important;
+}
+
+::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 140, 140, 0.28) !important;
+  border-radius: 999px !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 140, 140, 0.5) !important;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.browse-grid > *,
+.poster-card,
+.series-card {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease !important;
+}
+
+.browse-grid > *:hover,
+.poster-card:hover,
+.series-card:hover {
+  transform: translateY(-4px) !important;
+}

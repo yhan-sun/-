@@ -103,6 +103,8 @@
     searchWindowShow: 'SearchWindowShow',
     setStealthMode: 'SetStealthMode',
     setBossKey: 'SetBossKey',
+    bossToggle: 'BossToggle',
+    minimizeWindow: 'MinimizeWindow',
     toggleMaximize: 'ToggleMaximize',
     toggleFullscreen: 'ToggleFullscreen',
     isMaximized: 'IsMaximized',

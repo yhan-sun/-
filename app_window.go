@@ -62,7 +62,33 @@ func (a *App) GetWindowLayout() (interface{}, error) {
 
 // SetStealthMode toggles stealth / mini window mode
 func (a *App) SetStealthMode(enabled bool) (interface{}, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx != nil {
+		if enabled {
+			runtime.WindowSetSize(a.ctx, 360, 240)
+			runtime.WindowSetAlwaysOnTop(a.ctx, true)
+		} else {
+			if a.windowLayout == "portrait" {
+				runtime.WindowSetSize(a.ctx, 420, 800)
+			} else {
+				runtime.WindowSetSize(a.ctx, 1280, 800)
+			}
+			runtime.WindowSetAlwaysOnTop(a.ctx, a.alwaysOnTop)
+		}
+	}
 	return map[string]interface{}{"success": true, "enabled": enabled}, nil
+}
+
+// BossToggle minimizes or restores window instantly
+func (a *App) BossToggle() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, nil
+	}
+	runtime.WindowMinimise(a.ctx)
+	return true, nil
 }
 
 // SetBossKey configures boss key
