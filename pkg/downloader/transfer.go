@@ -84,7 +84,7 @@ func (d *Downloader) transfer(ctx context.Context, task *job) (path string, rece
 
 	total := max(resp.ContentLength, 0)
 	d.progress(ctx, task, 0, total, "", StatusDownloading)
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 128*1024)
 	lastTime := time.Now()
 	var lastBytes int64
 	for {

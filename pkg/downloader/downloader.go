@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,6 +232,8 @@ func missingDownload(path string) bool {
 // VerifyFiles scans outside the lock, then confirms a missing file before
 // changing its state in case a concurrent retry already replaced the file.
 func (d *Downloader) VerifyFiles() {
+	d.CleanOrphanPartFiles()
+
 	d.mu.RLock()
 	var completed []*job
 	for _, task := range d.tasks {
@@ -255,6 +258,27 @@ func (d *Downloader) VerifyFiles() {
 	if changed {
 		d.queueChanged()
 	}
+}
+
+// CleanOrphanPartFiles cleans up temporary .part files older than 30 minutes
+func (d *Downloader) CleanOrphanPartFiles() {
+	d.mu.RLock()
+	root := d.destDir
+	d.mu.RUnlock()
+	if root == "" {
+		return
+	}
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			name := info.Name()
+			if strings.HasPrefix(name, ".download-") && strings.HasSuffix(name, ".part") {
+				if time.Since(info.ModTime()) > 30*time.Minute {
+					_ = os.Remove(path)
+				}
+			}
+		}
+		return nil
+	})
 }
 
 func (d *Downloader) countsLocked() (active, queued int) {
