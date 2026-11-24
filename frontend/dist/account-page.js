@@ -16,7 +16,7 @@ const copy = {
   en: {
     title: 'Niuyouguo account',
     signIn: 'Sign in on the official site',
-    instructions: 'Use an SMS code or scan the QR code with the Hongguo app. If the homepage opens, select Sign in at the top right.',
+    instructions: 'Use an SMS code or scan the QR code with the mobile app. If the homepage opens, select Sign in at the top right.',
     open: 'Open sign-in window',
     browser: 'Open in default browser',
     opening: 'Opening…',
@@ -24,7 +24,7 @@ const copy = {
     browserOpened: 'The official site is open in your default browser. Check your sign-in status there.',
     failed: 'Could not open the site. Please try again.',
     history: 'Local watch history',
-    historyInfo: 'Playback progress is saved on this computer. History from the Hongguo mobile app is unavailable in this version.',
+    historyInfo: 'Playback progress is saved on this computer. History from the mobile app is unavailable in this version.',
     openHistory: 'View local watch history'
   }
 };

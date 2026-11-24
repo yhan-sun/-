@@ -432,6 +432,51 @@
     }
   }, true);
 
+  // Video stage click/double-click controls (single-click = play/pause, double-click = fullscreen)
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    let videoClickTimer = null;
+    document.addEventListener('click', event => {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('.player-controls-bar, .player-controls-popover, .player-controls-menu, button, input, select, textarea, a')) return;
+      const stage = target.closest('.player-stage');
+      if (!stage) return;
+      const video = stage.querySelector('video');
+      if (!video) return;
+
+      if (videoClickTimer) {
+        clearTimeout(videoClickTimer);
+        videoClickTimer = null;
+        return;
+      }
+      videoClickTimer = setTimeout(() => {
+        videoClickTimer = null;
+        if (video.paused) {
+          video.play().catch(() => {});
+          showPlayerHUD('▶ 播放');
+        } else {
+          video.pause();
+          showPlayerHUD('⏸ 暂停');
+        }
+      }, 220);
+    }, true);
+
+    document.addEventListener('dblclick', event => {
+      const target = event.target;
+      if (!target || typeof target.closest !== 'function') return;
+      if (target.closest('.player-controls-bar, .player-controls-popover, .player-controls-menu, button, input, select, textarea, a')) return;
+      const stage = target.closest('.player-stage');
+      if (!stage) return;
+      if (videoClickTimer) {
+        clearTimeout(videoClickTimer);
+        videoClickTimer = null;
+      }
+      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
+        window.electronAPI.toggleFullscreen().catch(() => {});
+      }
+    }, true);
+  }
+
   // Persistent playback rate & volume
   function getSavedPlaybackRate() {
     try {
@@ -568,7 +613,12 @@
 
     shelf.innerHTML = `
       <div class="cws-left">
-        ${cover ? `<img class="cws-cover" src="${cover}" alt="${title}" />` : ''}
+        ${cover ? `<img class="cws-cover" src="${cover}" alt="${title}" onerror="this.style.display='none'; const fb = this.parentElement?.querySelector('.cws-cover-fallback'); if (fb) fb.removeAttribute('hidden');" />` : ''}
+        <div class="cws-cover cws-cover-fallback" ${cover ? 'hidden' : ''}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+        </div>
         <div class="cws-info">
           <div class="cws-label"><span>▶</span> 继续观看</div>
           <div class="cws-title">${title}</div>

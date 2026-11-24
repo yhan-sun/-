@@ -27,7 +27,7 @@ static HGAccountWindow *accountWindow;
     if (self) {
         self.homeURL = url;
         self.loginScript = script;
-        window.title = [NSString stringWithFormat:@"红果短剧官网 · %@", url.host];
+        window.title = [NSString stringWithFormat:@"牛油果短剧官网 · %@", url.host];
         window.releasedWhenClosed = NO;
         window.delegate = self;
         [window center];
@@ -86,7 +86,7 @@ static HGAccountWindow *accountWindow;
     NSWindow *window = self.window;
     if (!window.isVisible || window.attachedSheet) return;
     NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"红果官网未能加载";
+    alert.messageText = @"牛油果官网未能加载";
     alert.informativeText = @"请检查网络后重试，也可以用默认浏览器打开官网。";
     [alert addButtonWithTitle:@"重新加载"];
     [alert addButtonWithTitle:@"用浏览器打开"];

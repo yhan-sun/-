@@ -398,6 +398,10 @@ select:has(+ .custom-select-wrapper),
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif !important;
 }
 
+.custom-select-wrapper.open {
+  z-index: 99999 !important;
+}
+
 /* Frosted Acrylic Translucent Trigger (Adaptive to Light & Dark Theme) */
 .custom-select-trigger {
   display: inline-flex !important;
@@ -1079,6 +1083,200 @@ input[type="search"]:focus,
   background: rgba(45, 45, 52, 0.95) !important;
   border-color: var(--accent, #ed9295) !important;
   box-shadow: 0 0 0 3px var(--accent-soft, #42302f) !important;
+}
+
+/* Polished Fallback Artwork for Continue Watching Shelf */
+.cws-cover-fallback {
+  width: 40px !important;
+  height: 54px !important;
+  border-radius: 6px !important;
+  display: flex;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(135deg, #f0eae1, #e2dad0) !important;
+  color: var(--accent, #c8383d) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  flex-shrink: 0 !important;
+}
+
+.cws-cover-fallback[hidden] {
+  display: none !important;
+}
+
+[data-theme="dark"] .cws-cover-fallback {
+  background: linear-gradient(135deg, #2c2d33, #222328) !important;
+  color: var(--accent, #ed9295) !important;
+}
+
+/* Polished Acrylic Modal Confirm Dialog */
+.player-confirm-mask {
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 1200 !important;
+  animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.player-confirm {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid var(--border, #e4e1dc) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+  padding: 24px 28px !important;
+  animation: drawerPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-theme="dark"] .player-confirm {
+  background: rgba(30, 30, 36, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Polished Acrylic Popover & Menu in Player Controls */
+.player-controls-popover {
+  background: rgba(24, 24, 28, 0.92) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5) !important;
+}
+
+.player-controls-menu {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+  border: 1px solid var(--border, #e4e1dc) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16) !important;
+}
+
+[data-theme="dark"] .player-controls-menu {
+  background: rgba(28, 28, 34, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Polished Episode Buttons in Player Popover */
+.player-episode-grid button {
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f0f0f0 !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.player-episode-grid button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  transform: translateY(-1px) scale(1.02) !important;
+}
+
+.player-episode-grid button[aria-current=true] {
+  background: var(--accent, #c8383d) !important;
+  border-color: var(--accent, #c8383d) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(200, 56, 61, 0.45) !important;
+}
+
+/* Polished Seek Bar and Volume Range Sliders */
+.player-controls-seek {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100% !important;
+  height: 5px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.28) !important;
+  outline: none !important;
+  cursor: pointer !important;
+  transition: height 0.15s ease, background 0.15s ease !important;
+}
+
+.player-controls-seek:hover {
+  height: 7px !important;
+  background: rgba(255, 255, 255, 0.38) !important;
+}
+
+.player-controls-seek::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 14px !important;
+  height: 14px !important;
+  border-radius: 50% !important;
+  background: var(--accent, #c8383d) !important;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.5) !important;
+  cursor: pointer !important;
+  transition: transform 0.15s ease !important;
+}
+
+.player-controls-seek:hover::-webkit-slider-thumb {
+  transform: scale(1.15) !important;
+}
+
+.player-controls-volume input[type=range] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.3) !important;
+  outline: none !important;
+  cursor: pointer !important;
+}
+
+.player-controls-volume input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 11px !important;
+  height: 11px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4) !important;
+  cursor: pointer !important;
+}
+
+/* Polished Player HUD & Toast Notifications */
+#player-hud-toast {
+  position: fixed !important;
+  top: 64px !important;
+  left: 50% !important;
+  transform: translateX(-50%) translateY(0) scale(1) !important;
+  background: rgba(20, 20, 24, 0.88) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  padding: 8px 18px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45) !important;
+  z-index: 999999 !important;
+  pointer-events: none !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.dm-toast {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  padding: 10px 18px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+  z-index: 9999 !important;
+  animation: drawerPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 
