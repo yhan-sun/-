@@ -408,4 +408,28 @@
       showPlayerHUD('倍速: 1.0x (原速)');
     }
   }, true);
+
+  // Auto-dismiss modal when clicking backdrop mask
+  window.addEventListener('click', event => {
+    if (event.target && event.target.classList && event.target.classList.contains('modal-mask')) {
+      const closeBtn = event.target.querySelector('.modal-close, button[aria-label="关闭"]');
+      if (closeBtn) closeBtn.click();
+    }
+  }, true);
+
+  // Graceful fallback for broken image URLs
+  window.addEventListener('error', event => {
+    if (event.target && event.target.tagName === 'IMG' && !event.target.dataset?.fallback) {
+      event.target.dataset.fallback = 'true';
+      event.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="%231a222c"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23566b82" font-family="-apple-system,system-ui,sans-serif" font-size="16">牛油果短剧</text></svg>';
+    }
+  }, true);
+
+  // Network online/offline status notifications
+  window.addEventListener('offline', () => {
+    showPlayerHUD('⚠️ 网络连接已断开');
+  });
+  window.addEventListener('online', () => {
+    showPlayerHUD('✅ 网络已恢复连接');
+  });
 })();

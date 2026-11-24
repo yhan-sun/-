@@ -1,6 +1,7 @@
 /* A percentage height stays inside the native window at every CSS zoom level. */
 :root {
   zoom: var(--interface-zoom, 1);
+  scroll-behavior: smooth !important;
 }
 
 .app-layout {
