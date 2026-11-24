@@ -86,16 +86,42 @@ type catalogGenre struct {
 }
 
 var catalogGenres = []catalogGenre{
-	{"hot", "热播"}, {"comeback", "逆袭"}, {"urban", "都市"}, {"costume", "古装"},
-	{"suspense", "悬疑"}, {"romance", "甜宠/爱情"}, {"family", "家庭"}, {"cute-kids", "萌宝"},
-	{"fantasy", "玄幻"}, {"period", "年代"}, {"legend", "传奇"}, {"growth", "成长"},
-	{"comedy", "喜剧"}, {"sci-fi", "科幻"}, {"drama", "剧情"}, {"thriller", "惊悚"},
-	{"godofwar", "战神"}, {"tycoon", "神豪"}, {"rebirth", "重生"}, {"traversal", "穿越"},
-	{"doctor", "神医"}, {"soninlaw", "赘婿"}, {"disguise", "马甲"}, {"comic", "动漫"},
+	{"hot", "热播"},
+	{"comeback", "逆袭"},
+	{"urban", "都市"},
+	{"costume", "古装"},
+	{"romance", "甜宠/爱情"},
+	{"suspense", "悬疑"},
+	{"comedy", "喜剧"},
+	{"fantasy", "玄幻"},
+	{"period", "年代"},
+	{"cute-kids", "萌宝"},
+	{"family", "家庭"},
+	{"legend", "传奇"},
+	{"growth", "成长"},
+	{"sci-fi", "科幻"},
+	{"thriller", "惊悚"},
+	{"horror", "恐怖"},
+	{"supernatural", "志怪"},
+	{"wonder", "奇幻"},
+	{"youth", "青春"},
+	{"clan", "家族"},
+	{"action-adventure", "动作冒险"},
+	{"drama", "剧情"},
+	{"disaster", "灾难"},
+	{"war", "战争"},
+	{"variety", "综艺"},
+	{"comic", "动漫"},
 }
 
 func (a *App) BrowseCategories() (interface{}, error) {
-	return []catalogGenre{{"real-drama", "真人剧"}, {"hot-drama", "热播总榜"}, {"comic-drama", "动态漫剧"}}, nil
+	return []catalogGenre{
+		{"real-drama", "真人剧"},
+		{"comic-drama", "动态漫剧"},
+		{"hot-drama", "热播总榜"},
+		{"hot-real-drama", "真人热榜"},
+		{"hot-comic-drama", "动漫热榜"},
+	}, nil
 }
 
 func catalogKeyword(category, genre string) string {

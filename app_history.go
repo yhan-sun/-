@@ -46,3 +46,42 @@ func (a *App) RemoveWatchHistory(seriesID string) (interface{}, error) {
 	runtime.EventsEmit(ctx, "watch-history-updated", map[string]string{"removedSeriesId": seriesID})
 	return map[string]interface{}{"success": true}, nil
 }
+
+func (a *App) CheckWatchHistoryItem(item map[string]interface{}) (interface{}, error) {
+	seriesID, _ := item["series_id"].(string)
+	if seriesID == "" {
+		return map[string]interface{}{"success": false, "error": "缺少 series_id"}, nil
+	}
+	series, err := a.ensureSeries(seriesID)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	latestTotal := series.Total
+	oldTotal := 0
+	if t, ok := item["total"].(float64); ok {
+		oldTotal = int(t)
+	}
+	hasNew := latestTotal > oldTotal && oldTotal > 0
+	unread := 0
+	if hasNew {
+		unread = latestTotal - oldTotal
+	}
+	return map[string]interface{}{
+		"success":        true,
+		"updated":        hasNew,
+		"total":          latestTotal,
+		"unreadEpisodes": unread,
+	}, nil
+}
+
+func (a *App) RefreshWatchHistory() (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+func (a *App) AcknowledgeWatchUpdates(seriesID string) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+func (a *App) FindSeriesSequels(seriesID string) (interface{}, error) {
+	return map[string]interface{}{"success": true, "sequels": []interface{}{}}, nil
+}

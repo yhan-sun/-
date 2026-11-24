@@ -356,16 +356,14 @@ func fetchOfficialCategoryPage(ctx context.Context, category, genreSlug string, 
 		hasMore = len(recList) >= 20
 	}
 
-	// Warm rank heat cache if empty and on page 1 of real-drama
+	// Warm rank heat cache if empty and on page 1
 	catalogCacheMu.RLock()
-	needWarmRank := len(rankHeatCache) == 0 && page == 1 && category == "real-drama" && (genreSlug == "" || genreSlug == "all")
+	needWarmRank := len(rankHeatCache) == 0 && page == 1
 	catalogCacheMu.RUnlock()
 	if needWarmRank {
-		go func() {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_, _ = fetchOfficialRank(bgCtx, "hot-real-drama")
-		}()
+		bgCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+		_, _ = fetchOfficialRank(bgCtx, "hot-drama")
+		cancel()
 	}
 
 	catalogCacheMu.RLock()
@@ -420,7 +418,7 @@ func fetchOfficialCategoryPage(ctx context.Context, category, genreSlug string, 
 		heat := ""
 		score := ""
 
-		if page == 1 && (genreSlug == "" || genreSlug == "all") && i < 20 {
+		if page == 1 && i < 20 {
 			rankNum = i + 1
 		}
 

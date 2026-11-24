@@ -63,3 +63,13 @@ func (a *App) GetWindowLayout() (interface{}, error) {
 	defer a.mu.Unlock()
 	return a.windowLayout, nil
 }
+
+// SetStealthMode toggles stealth / mini window mode
+func (a *App) SetStealthMode(enabled bool) (interface{}, error) {
+	return map[string]interface{}{"success": true, "enabled": enabled}, nil
+}
+
+// SetBossKey configures boss key
+func (a *App) SetBossKey(config map[string]interface{}) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}

@@ -120,3 +120,41 @@
 .account-page .account-card + .account-card {
   margin-top: 16px;
 }
+
+/* UI / UX Layout Enhancements: prevent "显示不全", overflow clipping & eliminate confusing route banners */
+.browse-source-note {
+  display: none !important;
+}
+
+.browse-header {
+  margin-bottom: 14px !important;
+}
+
+.browse-cats {
+  margin-bottom: 10px !important;
+}
+
+.browse-genres {
+  margin-bottom: 14px !important;
+}
+
+.main-content {
+  padding: 24px 32px 80px !important;
+  box-sizing: border-box !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.main-content[data-page="player"] {
+  padding: 0 !important;
+}
+
+.browse-pager {
+  padding: 16px 0 48px !important;
+}
+
+.window-toolbar {
+  height: 48px !important;
+  min-height: 48px !important;
+  box-sizing: border-box !important;
+}

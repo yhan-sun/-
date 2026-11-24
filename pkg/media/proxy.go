@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ func NewProxy(resolver StreamResolver) (*Proxy, error) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream/", p.handleStream)
+	mux.HandleFunc("/local/", p.handleLocalFile)
 	p.server = &http.Server{
 		Handler: mux,
 	}
@@ -69,6 +71,42 @@ func (p *Proxy) Close() error {
 
 func (p *Proxy) StreamURL(seriesID, vid string) string {
 	return fmt.Sprintf("http://%s/stream/%s/%s", p.addr, seriesID, vid)
+}
+
+func (p *Proxy) LocalURL(filePath string) string {
+	return fmt.Sprintf("http://%s/local/?path=%s", p.addr, url.QueryEscape(filePath))
+}
+
+func (p *Proxy) ClearCache() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cache = make(map[string]*cacheEntry)
+	p.cacheSize = 0
+}
+
+func (p *Proxy) CacheSize() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.cacheSize
+}
+
+func (p *Proxy) handleLocalFile(w http.ResponseWriter, r *http.Request) {
+	filePath := r.URL.Query().Get("path")
+	if filePath == "" {
+		http.Error(w, "missing path", http.StatusBadRequest)
+		return
+	}
+	if strings.HasPrefix(filePath, "file://") {
+		filePath = strings.TrimPrefix(filePath, "file://")
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Range")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.ServeFile(w, r, filePath)
 }
 
 func parseByteRange(rangeHeader string, totalSize int) (start, end int, hasRange bool, err error) {

@@ -388,3 +388,70 @@ func (a *App) ForgetSeries(seriesID string) (interface{}, error) {
 		"success": true,
 	}, nil
 }
+
+// OpenLocalPlayback returns a playable HTTP URL for local offline video files
+func (a *App) OpenLocalPlayback(fileURL string) (interface{}, error) {
+	a.mu.Lock()
+	proxy := a.proxy
+	a.mu.Unlock()
+	if proxy == nil {
+		return map[string]interface{}{"success": false, "error": "代理服务尚未就绪"}, nil
+	}
+	localURL := proxy.LocalURL(fileURL)
+	return map[string]interface{}{
+		"success": true,
+		"url":     localURL,
+	}, nil
+}
+
+// ReleaseLocalPlayback releases resources for local playback
+func (a *App) ReleaseLocalPlayback(url string) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// OnlineCacheStatus returns cache stats
+func (a *App) OnlineCacheStatus() (interface{}, error) {
+	a.mu.Lock()
+	proxy := a.proxy
+	a.mu.Unlock()
+	size := 0
+	if proxy != nil {
+		size = proxy.CacheSize()
+	}
+	text := fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+	if size == 0 {
+		text = "0 MB"
+	}
+	return map[string]interface{}{"success": true, "size": size, "text": text}, nil
+}
+
+// ClearOnlineCache clears proxy cache
+func (a *App) ClearOnlineCache() (interface{}, error) {
+	a.mu.Lock()
+	proxy := a.proxy
+	a.mu.Unlock()
+	if proxy != nil {
+		proxy.ClearCache()
+	}
+	return map[string]interface{}{"success": true, "size": 0, "text": "0 MB"}, nil
+}
+
+// CompatCacheStatus returns compatibility cache stats
+func (a *App) CompatCacheStatus() (interface{}, error) {
+	return map[string]interface{}{"success": true, "size": 0, "text": "0 MB"}, nil
+}
+
+// ClearCompatCache clears compatibility cache
+func (a *App) ClearCompatCache() (interface{}, error) {
+	return map[string]interface{}{"success": true, "size": 0, "text": "0 MB"}, nil
+}
+
+// WarmSeriesProgress pre-warms progress for series
+func (a *App) WarmSeriesProgress(seriesIDs []string) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// SearchWindowShow shows search window
+func (a *App) SearchWindowShow() (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}

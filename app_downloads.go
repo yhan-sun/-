@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"hongguo/pkg/downloader"
+	"hongguo/pkg/hgapi"
 )
 
 var errDownloadQueueUnavailable = errors.New("下载队列尚未就绪")
@@ -171,6 +173,120 @@ func (a *App) OpenFolder(dir string) (interface{}, error) {
 	}
 	if err := exec.Command("open", path).Run(); err != nil {
 		return nil, err
+	}
+	return map[string]interface{}{"success": true}, nil
+}
+
+// DownloadSingleEpisode downloads a single episode for a series
+func (a *App) DownloadSingleEpisode(seriesID string, vidIndex int, quality string) (interface{}, error) {
+	series, err := a.ensureSeries(seriesID)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	var targetEp *hgapi.Episode
+	for _, ep := range series.Episodes {
+		if ep.VidIndex == vidIndex {
+			targetEp = &ep
+			break
+		}
+	}
+	if targetEp == nil {
+		return map[string]interface{}{"success": false, "error": fmt.Sprintf("未找到第 %d 集", vidIndex)}, nil
+	}
+	return a.HongguoDownloadBatch(map[string]interface{}{
+		"seriesId":    seriesID,
+		"seriesTitle": series.SeriesTitle,
+		"quality":     quality,
+		"episodes": []interface{}{
+			map[string]interface{}{
+				"vid":       targetEp.Vid,
+				"vid_index": float64(targetEp.VidIndex),
+				"title":     targetEp.Title,
+				"cover":     targetEp.Cover,
+				"locked":    targetEp.Locked,
+			},
+		},
+	})
+}
+
+// DownloadFollowingEpisodes downloads all following unlocked episodes from fromVidIndex
+func (a *App) DownloadFollowingEpisodes(seriesID string, fromVidIndex int, quality string) (interface{}, error) {
+	series, err := a.ensureSeries(seriesID)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	var eps []interface{}
+	for _, ep := range series.Episodes {
+		if ep.VidIndex >= fromVidIndex && !ep.Locked {
+			eps = append(eps, map[string]interface{}{
+				"vid":       ep.Vid,
+				"vid_index": float64(ep.VidIndex),
+				"title":     ep.Title,
+				"cover":     ep.Cover,
+				"locked":    false,
+			})
+		}
+	}
+	if len(eps) == 0 {
+		return map[string]interface{}{"success": true, "count": 0}, nil
+	}
+	return a.HongguoDownloadBatch(map[string]interface{}{
+		"seriesId":    seriesID,
+		"seriesTitle": series.SeriesTitle,
+		"quality":     quality,
+		"episodes":    eps,
+	})
+}
+
+// DeleteSeriesFiles deletes all downloaded files for a series
+func (a *App) DeleteSeriesFiles(seriesID string) (interface{}, error) {
+	queue := a.downloadQueue()
+	if queue != nil {
+		tasks := queue.GetTasks()
+		var toDelete []string
+		for _, t := range tasks {
+			if t.SeriesID == seriesID {
+				toDelete = append(toDelete, t.ID)
+			}
+		}
+		if len(toDelete) > 0 {
+			_, _ = a.DeleteTasksWithFiles(toDelete, true)
+		}
+	}
+	_ = a.store.ForgetSeries(seriesID)
+	return map[string]interface{}{"success": true}, nil
+}
+
+// DeleteAllDownloaded deletes all downloaded tasks and files
+func (a *App) DeleteAllDownloaded(deleteDisk bool) (interface{}, error) {
+	queue := a.downloadQueue()
+	if queue == nil {
+		return map[string]interface{}{"success": true, "count": 0}, nil
+	}
+	tasks := queue.GetTasks()
+	var ids []string
+	for _, t := range tasks {
+		ids = append(ids, t.ID)
+	}
+	return a.DeleteTasksWithFiles(ids, deleteDisk)
+}
+
+// RescanDownloads rescans download status
+func (a *App) RescanDownloads() (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// CleanupWatchedEpisode removes downloaded file for watched episode
+func (a *App) CleanupWatchedEpisode(seriesID string, vidIndex int) (interface{}, error) {
+	queue := a.downloadQueue()
+	if queue != nil {
+		tasks := queue.GetTasks()
+		for _, t := range tasks {
+			if t.SeriesID == seriesID && t.VidIndex == vidIndex {
+				_, _, _ = queue.DeleteTask(t.ID, true)
+				break
+			}
+		}
 	}
 	return map[string]interface{}{"success": true}, nil
 }

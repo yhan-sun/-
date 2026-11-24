@@ -77,7 +77,30 @@
     return pendingApp;
   }
 
-  const names = { openExternalUrl: 'OpenExternalURL', searchSeriesMore: 'SearchSeries' };
+  const names = {
+    openExternalUrl: 'OpenExternalURL',
+    searchSeriesMore: 'SearchSeries',
+    downloadSingleEpisode: 'DownloadSingleEpisode',
+    downloadFollowingEpisodes: 'DownloadFollowingEpisodes',
+    deleteSeriesFiles: 'DeleteSeriesFiles',
+    deleteAllDownloaded: 'DeleteAllDownloaded',
+    openLocalPlayback: 'OpenLocalPlayback',
+    releaseLocalPlayback: 'ReleaseLocalPlayback',
+    checkWatchHistoryItem: 'CheckWatchHistoryItem',
+    refreshWatchHistory: 'RefreshWatchHistory',
+    acknowledgeWatchUpdates: 'AcknowledgeWatchUpdates',
+    findSeriesSequels: 'FindSeriesSequels',
+    cleanupWatchedEpisode: 'CleanupWatchedEpisode',
+    rescanDownloads: 'RescanDownloads',
+    onlineCacheStatus: 'OnlineCacheStatus',
+    clearOnlineCache: 'ClearOnlineCache',
+    compatCacheStatus: 'CompatCacheStatus',
+    clearCompatCache: 'ClearCompatCache',
+    warmSeriesProgress: 'WarmSeriesProgress',
+    searchWindowShow: 'SearchWindowShow',
+    setStealthMode: 'SetStealthMode',
+    setBossKey: 'SetBossKey'
+  };
   async function invoke(method, args) {
     const app = await getApp();
     if (!app) throw new Error('桌面服务尚未就绪，请重试');
@@ -157,8 +180,22 @@
     getMergeTasks: async () => [],
     getPublicDetails: async () => ({ success: true, details: null }),
     getAppUpdateState: async () => ({ checking: false, available: false, downloaded: false, error: null }),
+    checkAppUpdate: async () => ({ success: true, available: false }),
+    openAppUpdate: async () => ({ success: true }),
     getBossKeyState: async () => ({ enabled: false, registered: false }),
-    getCurrentAnnouncement: async () => ({ visible: false, announcement: null })
+    getCurrentAnnouncement: async () => ({ visible: false, announcement: null }),
+    acknowledgeAnnouncement: async () => ({ success: true }),
+    dismissAnnouncement: async () => ({ success: true }),
+    setAnnouncementPreferences: async () => ({ success: true }),
+    cancelMerge: async () => ({ success: true }),
+    deleteMergeTask: async () => ({ success: true }),
+    mergeSeries: async () => ({ success: false, error: '当前桌面版合并功能正在优化中' }),
+    discoverCastDevices: async () => [],
+    startCasting: async () => ({ success: false, error: '当前桌面版暂不支持投屏功能' }),
+    controlCasting: async () => ({ success: true }),
+    testProxy: async () => ({ success: false, error: '当前桌面版尚未接入网络代理' }),
+    enterNativePictureInPicture: async () => false,
+    openEpisodeExternal: async url => invoke('openExternalUrl', [url])
   };
 
   for (const [method, event] of Object.entries(eventMethods)) {
@@ -186,18 +223,45 @@
     }
   });
 
+  // Ensure official web channel is selected by default for complete catalog & accurate official ranking
+  try {
+    if (localStorage.getItem('hongguo.catalog.channel.v1') !== 'web') {
+      localStorage.setItem('hongguo.catalog.channel.v1', 'web');
+    }
+    if (localStorage.getItem('hongguo.feed.catalog.channel.v1') !== 'web') {
+      localStorage.setItem('hongguo.feed.catalog.channel.v1', 'web');
+    }
+  } catch {}
+
   window.addEventListener('resize', updateWindowWidth);
   updateWindowWidth();
   // Restore the saved size on launch, including when the first page is the catalog.
   getSettings().catch(() => {}); // Later settings reads retry after the desktop service is ready.
 
-  // Older WebViews need the native drag message for the custom title bar.
+  // Window drag: trigger immediate native drag on mousedown for custom title bar
   window.addEventListener('mousedown', event => {
     if (event.button !== 0 || !event.target?.closest) return;
-    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, .toolbar-actions')) return;
-    if (event.target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"]')) {
-      if (window.wails?.flags) window.wails.flags.deferDragToMouseMove = false;
-      window.WailsInvoke?.('drag');
+    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"]')) return;
+    if (event.target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"], [style*="-webkit-app-region: drag"]')) {
+      if (window.wails?.flags) {
+        window.wails.flags.deferDragToMouseMove = false;
+      }
+      if (typeof window.WailsInvoke === 'function') {
+        window.WailsInvoke('drag');
+      } else if (window.webkit?.messageHandlers?.external?.postMessage) {
+        window.webkit.messageHandlers.external.postMessage('drag');
+      }
+    }
+  }, true);
+
+  // Double-click window toolbar to toggle maximize
+  window.addEventListener('dblclick', event => {
+    if (event.button !== 0 || !event.target?.closest) return;
+    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"]')) return;
+    if (event.target.closest('.window-toolbar')) {
+      if (typeof window.electronAPI?.toggleMaximize === 'function') {
+        window.electronAPI.toggleMaximize().catch(() => {});
+      }
     }
   }, true);
 })();

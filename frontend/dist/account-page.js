@@ -1,8 +1,8 @@
 const copy = {
   zh: {
-    title: '红果账号',
+    title: '牛油果账号',
     signIn: '官网登录',
-    instructions: '在官网使用手机号验证码，或用红果 App 扫码。若先看到首页，点右上角「登录」。',
+    instructions: '在官网使用手机号验证码，或用短剧 App 扫码。若先看到首页，点右上角「登录」。',
     open: '打开官网登录',
     browser: '用默认浏览器打开',
     opening: '正在打开…',
@@ -10,11 +10,11 @@ const copy = {
     browserOpened: '官网已在默认浏览器打开。请在浏览器内查看登录结果。',
     failed: '打开官网失败，请重试。',
     history: '本机观看记录',
-    historyInfo: '这里保存这台电脑的播放进度。当前版本未接入手机红果 App 的观看记录。',
+    historyInfo: '这里保存这台电脑的播放进度。当前版本未接入手机 App 的观看记录。',
     openHistory: '查看本机观看记录'
   },
   en: {
-    title: 'Hongguo account',
+    title: 'Niuyouguo account',
     signIn: 'Sign in on the official site',
     instructions: 'Use an SMS code or scan the QR code with the Hongguo app. If the homepage opens, select Sign in at the top right.',
     open: 'Open sign-in window',
