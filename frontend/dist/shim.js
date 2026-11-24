@@ -103,7 +103,14 @@
     toggleMaximize: 'ToggleMaximize',
     toggleFullscreen: 'ToggleFullscreen',
     isMaximized: 'IsMaximized',
-    isFullscreen: 'IsFullscreen'
+    isFullscreen: 'IsFullscreen',
+    downloadSeriesToNas: 'DownloadSeriesToNas',
+    transcodeForPlayback: 'TranscodeForPlayback',
+    cancelTranscodeForPlayback: 'CancelTranscodeForPlayback',
+    setBuiltinSourceEnabled: 'SetBuiltinSourceEnabled',
+    saveCustomSource: 'SaveCustomSource',
+    deleteCustomSource: 'DeleteCustomSource',
+    testCustomSource: 'TestCustomSource'
   };
   async function invoke(method, args) {
     const app = await getApp();
@@ -199,7 +206,14 @@
     controlCasting: async () => ({ success: true }),
     testProxy: async () => ({ success: false, error: '当前桌面版尚未接入网络代理' }),
     enterNativePictureInPicture: async () => false,
-    openEpisodeExternal: async url => invoke('openExternalUrl', [url])
+    openEpisodeExternal: async url => invoke('openExternalUrl', [url]),
+    downloadSeriesToNas: async (seriesId, targetDir, options = {}) => invoke('downloadSeriesToNas', [seriesId, targetDir, options]),
+    transcodeForPlayback: async payload => invoke('transcodeForPlayback', [payload]),
+    cancelTranscodeForPlayback: async payload => invoke('cancelTranscodeForPlayback', [payload]),
+    setBuiltinSourceEnabled: async (sourceId, enabled) => invoke('setBuiltinSourceEnabled', [sourceId, enabled]),
+    saveCustomSource: async source => invoke('saveCustomSource', [source]),
+    deleteCustomSource: async id => invoke('deleteCustomSource', [id]),
+    testCustomSource: async source => invoke('testCustomSource', [source])
   };
 
   for (const [method, event] of Object.entries(eventMethods)) {

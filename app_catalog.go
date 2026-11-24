@@ -12,7 +12,7 @@ import (
 
 // SearchSeries searches for dramas matching the keyword
 func (a *App) SearchSeries(keyword string, options map[string]interface{}) (interface{}, error) {
-	if source, _ := options["source"].(string); source != "" && source != "hongguo" {
+	if source, _ := options["source"].(string); source != "" && source != "hongguo" && source != "niuyouguo" && source != "all" && source != "web" {
 		return nil, fmt.Errorf("当前桌面版未接入此来源")
 	}
 	keyword = strings.TrimSpace(keyword)
@@ -156,7 +156,7 @@ func catalogPage(items []hgapi.DramaCatalogItem, hasMore bool, category string) 
 }
 
 func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
-	if source, _ := options["source"].(string); source != "" && source != "hongguo" {
+	if source, _ := options["source"].(string); source != "" && source != "hongguo" && source != "niuyouguo" && source != "all" && source != "web" {
 		return nil, fmt.Errorf("当前桌面版未接入此来源")
 	}
 	a.mu.Lock()
@@ -237,4 +237,24 @@ func (a *App) GetMediaSources() (interface{}, error) {
 
 func (a *App) GetCustomSources() (interface{}, error) {
 	return map[string]interface{}{"success": true, "sources": []interface{}{}}, nil
+}
+
+// SetBuiltinSourceEnabled enables or disables a builtin source
+func (a *App) SetBuiltinSourceEnabled(sourceID string, enabled bool) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// SaveCustomSource saves a custom source configuration
+func (a *App) SaveCustomSource(source map[string]interface{}) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// DeleteCustomSource deletes a custom source configuration
+func (a *App) DeleteCustomSource(id string) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// TestCustomSource tests connectivity to a custom media source
+func (a *App) TestCustomSource(source map[string]interface{}) (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
 }

@@ -168,3 +168,28 @@ test('the account window opens only the visible official header sign-in button, 
   assert.equal(observe, null);
   assert.deepEqual(clicked, ['登录']);
 });
+
+test('extended bindings for compatibility, NAS export and media source management are exposed and callable', async () => {
+  const calls = [];
+  const { api } = loadBridge({
+    DownloadSeriesToNas: async (...args) => { calls.push(['nas', ...args]); return { success: true, count: 5 }; },
+    TranscodeForPlayback: async (...args) => { calls.push(['transcode', ...args]); return { success: true, url: 'http://127.0.0.1:9090/stream' }; },
+    SetBuiltinSourceEnabled: async (...args) => { calls.push(['source_toggle', ...args]); return { success: true }; }
+  });
+  assert.equal(typeof api.downloadSeriesToNas, 'function');
+  assert.equal(typeof api.transcodeForPlayback, 'function');
+  assert.equal(typeof api.setBuiltinSourceEnabled, 'function');
+
+  const nasRes = await api.downloadSeriesToNas('sid123', '/volume1/drama', { createFolder: true });
+  assert.equal(nasRes.success, true);
+  assert.equal(nasRes.count, 5);
+
+  const transRes = await api.transcodeForPlayback({ seriesId: 'sid123', vid: 'v456' });
+  assert.equal(transRes.success, true);
+  assert.equal(transRes.url, 'http://127.0.0.1:9090/stream');
+
+  const toggleRes = await api.setBuiltinSourceEnabled('hongguo', true);
+  assert.equal(toggleRes.success, true);
+
+  assert.equal(calls.length, 3);
+});

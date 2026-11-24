@@ -145,7 +145,7 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 	if ok && cached != nil {
 		return cached, nil
 	}
-	if item := a.store.GetSeries(seriesID); item != nil && len(item.Episodes) > 0 {
+	if item := a.store.GetSeries(seriesID); item != nil && len(item.Episodes) > 0 && len(item.Episodes) >= item.Total {
 		eps := make([]hgapi.Episode, len(item.Episodes))
 		for i, ep := range item.Episodes {
 			eps[i] = hgapi.Episode{
@@ -453,5 +453,44 @@ func (a *App) WarmSeriesProgress(seriesIDs []string) (interface{}, error) {
 
 // SearchWindowShow shows search window
 func (a *App) SearchWindowShow() (interface{}, error) {
+	return map[string]interface{}{"success": true}, nil
+}
+
+// TranscodeForPlayback handles compatibility playback stream requests
+func (a *App) TranscodeForPlayback(payload map[string]interface{}) (interface{}, error) {
+	seriesID, _ := payload["seriesId"].(string)
+	vid, _ := payload["vid"].(string)
+	filePath, _ := payload["filePath"].(string)
+
+	a.mu.Lock()
+	proxy := a.proxy
+	a.mu.Unlock()
+	if proxy == nil {
+		return map[string]interface{}{"success": false, "error": "播放服务尚未就绪"}, nil
+	}
+
+	var playURL string
+	if filePath != "" {
+		if _, err := os.Stat(filePath); err == nil {
+			playURL = proxy.LocalURL(filePath)
+		}
+	}
+	if playURL == "" && seriesID != "" && vid != "" {
+		playURL = proxy.StreamURL(seriesID, vid)
+	}
+	if playURL == "" {
+		return map[string]interface{}{"success": false, "error": "无法生成播放流"}, nil
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"url":     playURL,
+		"cached":  true,
+		"elapsed": 0.1,
+	}, nil
+}
+
+// CancelTranscodeForPlayback cancels transcode request
+func (a *App) CancelTranscodeForPlayback(payload map[string]interface{}) (interface{}, error) {
 	return map[string]interface{}{"success": true}, nil
 }

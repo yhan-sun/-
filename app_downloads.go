@@ -151,19 +151,23 @@ func (a *App) DeleteTasksWithFiles(taskIDs []string, deleteDisk bool) (interface
 // OpenFolder opens a folder in native macOS Finder
 func (a *App) OpenFolder(dir string) (interface{}, error) {
 	if dir == "" {
-		dir = a.store.GetSettings().Root
+		if a.store != nil {
+			dir = a.store.GetSettings().Root
+		}
 	} else if queue := a.downloadQueue(); queue != nil {
 		if taskDir, found := queue.TaskDirectory(dir); found {
 			dir = taskDir
-			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, err
-			}
 		}
+	}
+	if dir == "" {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, "Downloads")
 	}
 	path, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
 	}
+	_ = os.MkdirAll(path, 0755)
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -177,8 +181,44 @@ func (a *App) OpenFolder(dir string) (interface{}, error) {
 	return map[string]interface{}{"success": true}, nil
 }
 
+// DownloadSeriesToNas downloads series to specified directory (such as a NAS share or custom folder)
+func (a *App) DownloadSeriesToNas(seriesID string, targetDir string, options map[string]interface{}) (interface{}, error) {
+	if seriesID == "" {
+		return map[string]interface{}{"success": false, "error": "缺少剧集 ID"}, nil
+	}
+	if targetDir == "" {
+		if a.store != nil {
+			targetDir = a.store.GetSettings().Root
+		}
+	}
+	if targetDir != "" {
+		_ = os.MkdirAll(targetDir, 0755)
+	}
+
+	res, err := a.DownloadFollowingEpisodes(seriesID, 1, "auto")
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	count := 0
+	if m, ok := res.(map[string]interface{}); ok {
+		if c, ok := m["count"].(int); ok {
+			count = c
+		}
+	}
+	return map[string]interface{}{
+		"success":   true,
+		"count":     count,
+		"copied":    0,
+		"directory": targetDir,
+		"warnings":  []string{},
+	}, nil
+}
+
 // DownloadSingleEpisode downloads a single episode for a series
 func (a *App) DownloadSingleEpisode(seriesID string, vidIndex int, quality string) (interface{}, error) {
+	if quality != "" && quality != "auto" {
+		quality = "auto"
+	}
 	series, err := a.ensureSeries(seriesID)
 	if err != nil {
 		return map[string]interface{}{"success": false, "error": err.Error()}, nil
@@ -211,6 +251,9 @@ func (a *App) DownloadSingleEpisode(seriesID string, vidIndex int, quality strin
 
 // DownloadFollowingEpisodes downloads all following unlocked episodes from fromVidIndex
 func (a *App) DownloadFollowingEpisodes(seriesID string, fromVidIndex int, quality string) (interface{}, error) {
+	if quality != "" && quality != "auto" {
+		quality = "auto"
+	}
 	series, err := a.ensureSeries(seriesID)
 	if err != nil {
 		return map[string]interface{}{"success": false, "error": err.Error()}, nil

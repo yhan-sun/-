@@ -424,7 +424,7 @@ func fetchOfficialCategoryPage(ctx context.Context, category, genreSlug string, 
 
 		// Check if we have rank/heat in cache
 		if info, exists := rankHeatCache[sid]; exists {
-			if rankNum == 0 && info.Rank > 0 {
+			if info.Rank > 0 {
 				rankNum = info.Rank
 			}
 			heat = info.Heat

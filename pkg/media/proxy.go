@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"hongguo/pkg/media/cenc"
@@ -20,18 +21,20 @@ type StreamResolver func(ctx context.Context, seriesID, vid string) (mediaURL st
 
 type cacheEntry struct {
 	buffer    []byte
-	updatedAt time.Time
+	updatedAt atomic.Int64 // unix milli
 }
 
 type Proxy struct {
-	listener  net.Listener
-	addr      string
-	server    *http.Server
-	resolver  StreamResolver
-	mu        sync.RWMutex
-	cache     map[string]*cacheEntry
-	cacheSize int
-	maxCache  int
+	listener   net.Listener
+	addr       string
+	server     *http.Server
+	resolver   StreamResolver
+	mu         sync.RWMutex
+	cache      map[string]*cacheEntry
+	cacheSize  int
+	maxCache   int
+	inflightMu sync.Mutex
+	inflight   map[string]chan struct{}
 }
 
 func NewProxy(resolver StreamResolver) (*Proxy, error) {
@@ -46,6 +49,7 @@ func NewProxy(resolver StreamResolver) (*Proxy, error) {
 		resolver: resolver,
 		cache:    make(map[string]*cacheEntry),
 		maxCache: 10, // keep up to 10 cached episodes in memory
+		inflight: make(map[string]chan struct{}),
 	}
 
 	mux := http.NewServeMux()
@@ -161,7 +165,7 @@ func (p *Proxy) getCached(key string) []byte {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if entry, ok := p.cache[key]; ok {
-		entry.updatedAt = time.Now()
+		entry.updatedAt.Store(time.Now().UnixMilli())
 		return entry.buffer
 	}
 	return nil
@@ -174,22 +178,30 @@ func (p *Proxy) setCached(key string, data []byte) {
 	if len(p.cache) >= p.maxCache {
 		// Evict oldest
 		var oldestKey string
-		var oldestTime time.Time
+		var oldestTime int64
 		first := true
 		for k, v := range p.cache {
-			if first || v.updatedAt.Before(oldestTime) {
+			t := v.updatedAt.Load()
+			if first || t < oldestTime {
 				oldestKey = k
-				oldestTime = v.updatedAt
+				oldestTime = t
 				first = false
 			}
 		}
-		delete(p.cache, oldestKey)
+		if oldestKey != "" {
+			if old, ok := p.cache[oldestKey]; ok {
+				p.cacheSize -= len(old.buffer)
+			}
+			delete(p.cache, oldestKey)
+		}
 	}
 
-	p.cache[key] = &cacheEntry{
-		buffer:    data,
-		updatedAt: time.Now(),
+	entry := &cacheEntry{
+		buffer: data,
 	}
+	entry.updatedAt.Store(time.Now().UnixMilli())
+	p.cache[key] = entry
+	p.cacheSize += len(data)
 }
 
 func (p *Proxy) handleStream(w http.ResponseWriter, r *http.Request) {
@@ -221,57 +233,80 @@ func (p *Proxy) handleStream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		mediaURL, contentKey, err := p.resolver(r.Context(), seriesID, vid)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("resolve failed: %v", err), http.StatusBadGateway)
-			return
-		}
+		p.inflightMu.Lock()
+		waitCh, inFlight := p.inflight[cacheKey]
+		if inFlight {
+			p.inflightMu.Unlock()
+			<-waitCh
+			buf = p.getCached(cacheKey)
+		} else {
+			waitCh = make(chan struct{})
+			p.inflight[cacheKey] = waitCh
+			p.inflightMu.Unlock()
 
-		// Download media
-		req, err := http.NewRequestWithContext(r.Context(), "GET", mediaURL, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-		req.Header.Set("Referer", "https://hongguoduanju.com/")
+			defer func() {
+				p.inflightMu.Lock()
+				delete(p.inflight, cacheKey)
+				close(waitCh)
+				p.inflightMu.Unlock()
+			}()
 
-		client := &http.Client{
-			Transport: &http.Transport{
-				Proxy: nil,
-			},
-			Timeout: 30 * time.Second,
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("fetch media failed: %v", err), http.StatusBadGateway)
-			return
-		}
-		defer resp.Body.Close()
+			// Use decoupled context for upstream downloading so browser probe aborts don't terminate the stream download
+			bgCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
 
-		if resp.StatusCode != http.StatusOK {
-			http.Error(w, fmt.Sprintf("fetch media HTTP %d", resp.StatusCode), resp.StatusCode)
-			return
-		}
-
-		rawBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("read media failed: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		if len(contentKey) > 0 {
-			decrypted, err := cenc.DecryptMp4Buffer(rawBytes, contentKey)
+			mediaURL, contentKey, err := p.resolver(bgCtx, seriesID, vid)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("decrypt failed: %v", err), http.StatusInternalServerError)
+				http.Error(w, fmt.Sprintf("resolve failed: %v", err), http.StatusBadGateway)
 				return
 			}
-			buf = decrypted
-		} else {
-			buf = rawBytes
-		}
 
-		p.setCached(cacheKey, buf)
+			// Download media
+			req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+			req.Header.Set("Referer", "https://hongguoduanju.com/")
+
+			client := &http.Client{
+				Transport: &http.Transport{
+					Proxy: nil,
+				},
+				Timeout: 45 * time.Second,
+			}
+			resp, err := client.Do(req)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("fetch media failed: %v", err), http.StatusBadGateway)
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				http.Error(w, fmt.Sprintf("fetch media HTTP %d", resp.StatusCode), resp.StatusCode)
+				return
+			}
+
+			rawBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("read media failed: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			if len(contentKey) > 0 {
+				decrypted, err := cenc.DecryptMp4Buffer(rawBytes, contentKey)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("decrypt failed: %v", err), http.StatusInternalServerError)
+					return
+				}
+				buf = decrypted
+			} else {
+				buf = rawBytes
+			}
+
+			p.setCached(cacheKey, buf)
+		}
 	}
 
 	totalSize := len(buf)
