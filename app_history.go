@@ -7,9 +7,8 @@ import (
 )
 
 func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float64, metadata map[string]interface{}) (bool, error) {
-	ctx, err := a.desktopContext()
-	if err != nil {
-		return false, err
+	if a.store == nil {
+		return false, nil
 	}
 	position := storage.WatchItem{SeriesID: seriesID, VidIndex: vidIndex, CurrentTime: seconds}
 	position.SeriesTitle, _ = metadata["title"].(string)
@@ -18,12 +17,22 @@ func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float6
 	position.Ended, _ = metadata["ended"].(bool)
 
 	if err := a.store.SavePlaybackPosition(position); err != nil {
-		runtime.EventsEmit(ctx, "storage-error", map[string]string{"error": "观看进度保存失败：" + err.Error()})
+		a.mu.Lock()
+		ctx := a.ctx
+		a.mu.Unlock()
+		if ctx != nil {
+			runtime.EventsEmit(ctx, "storage-error", map[string]string{"error": "观看进度保存失败：" + err.Error()})
+		}
 		return false, err
 	}
-	runtime.EventsEmit(ctx, "watch-history-updated", map[string]interface{}{
-		"series_id": seriesID, "vid_index": vidIndex, "currentTime": seconds,
-	})
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx != nil {
+		runtime.EventsEmit(ctx, "watch-history-updated", map[string]interface{}{
+			"series_id": seriesID, "vid_index": vidIndex, "currentTime": seconds,
+		})
+	}
 	return true, nil
 }
 
@@ -42,14 +51,35 @@ func (a *App) GetWatchHistory() (interface{}, error) {
 }
 
 func (a *App) RemoveWatchHistory(seriesID string) (interface{}, error) {
-	ctx, err := a.desktopContext()
-	if err != nil {
-		return nil, err
+	if a.store != nil {
+		if err := a.store.RemoveWatchHistory(seriesID); err != nil {
+			return nil, err
+		}
 	}
-	if err := a.store.RemoveWatchHistory(seriesID); err != nil {
-		return nil, err
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx != nil {
+		runtime.EventsEmit(ctx, "watch-history-updated", map[string]string{"removedSeriesId": seriesID})
 	}
-	runtime.EventsEmit(ctx, "watch-history-updated", map[string]string{"removedSeriesId": seriesID})
+	return map[string]interface{}{"success": true}, nil
+}
+
+// ClearWatchHistory removes all watch history entries
+func (a *App) ClearWatchHistory() (interface{}, error) {
+	if a.store == nil {
+		return map[string]interface{}{"success": true}, nil
+	}
+	history := a.store.GetWatchHistory()
+	for _, item := range history {
+		_ = a.store.RemoveWatchHistory(item.SeriesID)
+	}
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx != nil {
+		runtime.EventsEmit(ctx, "watch-history-updated", map[string]interface{}{"cleared": true})
+	}
 	return map[string]interface{}{"success": true}, nil
 }
 

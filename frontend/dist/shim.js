@@ -88,6 +88,9 @@
     releaseLocalPlayback: 'ReleaseLocalPlayback',
     checkWatchHistoryItem: 'CheckWatchHistoryItem',
     refreshWatchHistory: 'RefreshWatchHistory',
+    clearWatchHistory: 'ClearWatchHistory',
+    removeWatchHistory: 'RemoveWatchHistory',
+    getWatchHistory: 'GetWatchHistory',
     acknowledgeWatchUpdates: 'AcknowledgeWatchUpdates',
     findSeriesSequels: 'FindSeriesSequels',
     cleanupWatchedEpisode: 'CleanupWatchedEpisode',
@@ -213,7 +216,8 @@
     setBuiltinSourceEnabled: async (sourceId, enabled) => invoke('setBuiltinSourceEnabled', [sourceId, enabled]),
     saveCustomSource: async source => invoke('saveCustomSource', [source]),
     deleteCustomSource: async id => invoke('deleteCustomSource', [id]),
-    testCustomSource: async source => invoke('testCustomSource', [source])
+    testCustomSource: async source => invoke('testCustomSource', [source]),
+    clearWatchHistory: async () => invoke('clearWatchHistory', [])
   };
 
   for (const [method, event] of Object.entries(eventMethods)) {
