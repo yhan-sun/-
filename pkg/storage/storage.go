@@ -103,3 +103,73 @@ func (s *Store) save() error {
 	}
 	return os.Rename(temp.Name(), s.filePath)
 }
+
+// ExportData returns a deep copy of the current store data for backup
+func (s *Store) ExportData() StoreData {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	historyCopy := make(map[string]*WatchItem, len(s.data.History))
+	for k, v := range s.data.History {
+		if v != nil {
+			item := *v
+			historyCopy[k] = &item
+		}
+	}
+
+	seriesCopy := make(map[string]*SeriesItem, len(s.data.Series))
+	for k, v := range s.data.Series {
+		if v != nil {
+			item := *v
+			seriesCopy[k] = &item
+		}
+	}
+
+	return StoreData{
+		Settings: s.data.Settings,
+		History:  historyCopy,
+		Series:   seriesCopy,
+	}
+}
+
+// ImportData safely merges or replaces backup data in the store and persists it
+func (s *Store) ImportData(data StoreData, merge bool) (int, int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	historyCount := 0
+	seriesCount := 0
+
+	if !merge {
+		s.data.History = make(map[string]*WatchItem)
+		s.data.Series = make(map[string]*SeriesItem)
+	}
+
+	if s.data.History == nil {
+		s.data.History = make(map[string]*WatchItem)
+	}
+	for k, v := range data.History {
+		if k != "" && v != nil {
+			item := *v
+			s.data.History[k] = &item
+			historyCount++
+		}
+	}
+
+	if s.data.Series == nil {
+		s.data.Series = make(map[string]*SeriesItem)
+	}
+	for k, v := range data.Series {
+		if k != "" && v != nil {
+			item := *v
+			s.data.Series[k] = &item
+			seriesCount++
+		}
+	}
+
+	if err := s.save(); err != nil {
+		return 0, 0, err
+	}
+	return historyCount, seriesCount, nil
+}
+

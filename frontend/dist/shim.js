@@ -115,7 +115,9 @@
     setBuiltinSourceEnabled: 'SetBuiltinSourceEnabled',
     saveCustomSource: 'SaveCustomSource',
     deleteCustomSource: 'DeleteCustomSource',
-    testCustomSource: 'TestCustomSource'
+    testCustomSource: 'TestCustomSource',
+    exportUserData: 'ExportUserData',
+    importUserData: 'ImportUserData'
   };
   async function invoke(method, args) {
     const app = await getApp();
@@ -234,7 +236,9 @@
     saveCustomSource: async source => invoke('saveCustomSource', [source]),
     deleteCustomSource: async id => invoke('deleteCustomSource', [id]),
     testCustomSource: async source => invoke('testCustomSource', [source]),
-    clearWatchHistory: async () => invoke('clearWatchHistory', [])
+    clearWatchHistory: async () => invoke('clearWatchHistory', []),
+    exportUserData: async () => invoke('exportUserData', []),
+    importUserData: async payload => invoke('importUserData', [payload])
   };
 
   for (const [method, event] of Object.entries(eventMethods)) {
@@ -368,12 +372,14 @@
       }
     } else if (event.code === 'ArrowRight') {
       event.preventDefault();
-      video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 5);
-      showPlayerHUD('快进 +5s');
+      const step = event.shiftKey ? 10 : 5;
+      video.currentTime = Math.min(video.duration || Infinity, video.currentTime + step);
+      showPlayerHUD(`快进 +${step}s`);
     } else if (event.code === 'ArrowLeft') {
       event.preventDefault();
-      video.currentTime = Math.max(0, video.currentTime - 5);
-      showPlayerHUD('快退 -5s');
+      const step = event.shiftKey ? 10 : 5;
+      video.currentTime = Math.max(0, video.currentTime - step);
+      showPlayerHUD(`快退 -${step}s`);
     } else if (event.code === 'ArrowUp') {
       event.preventDefault();
       video.volume = Math.min(1, Math.round((video.volume + 0.05) * 100) / 100);
@@ -383,6 +389,20 @@
       event.preventDefault();
       video.volume = Math.max(0, Math.round((video.volume - 0.05) * 100) / 100);
       showPlayerHUD('音量: ' + Math.round(video.volume * 100) + '%');
+    } else if (event.key === ']' || (!event.metaKey && !event.ctrlKey && event.code === 'KeyN')) {
+      event.preventDefault();
+      const nextBtn = document.querySelector('button[aria-label*="下一集"], button[title*="下一集"]');
+      if (nextBtn && !nextBtn.disabled) {
+        nextBtn.click();
+        showPlayerHUD('⏭ 下一集');
+      }
+    } else if (event.key === '[' || (!event.metaKey && !event.ctrlKey && event.code === 'KeyP')) {
+      event.preventDefault();
+      const prevBtn = document.querySelector('button[aria-label*="上一集"], button[title*="上一集"]');
+      if (prevBtn && !prevBtn.disabled) {
+        prevBtn.click();
+        showPlayerHUD('⏮ 上一集');
+      }
     } else if (event.code === 'KeyF') {
       event.preventDefault();
       if (typeof window.electronAPI?.toggleFullscreen === 'function') {
@@ -396,18 +416,256 @@
       event.preventDefault();
       const nextRate = Math.min(3.0, Math.round((video.playbackRate + 0.25) * 100) / 100);
       video.playbackRate = nextRate;
+      savePlaybackRate(nextRate);
       showPlayerHUD('倍速: ' + nextRate + 'x');
     } else if (event.key === '<' || (event.shiftKey && event.key === ',')) {
       event.preventDefault();
       const prevRate = Math.max(0.5, Math.round((video.playbackRate - 0.25) * 100) / 100);
       video.playbackRate = prevRate;
+      savePlaybackRate(prevRate);
       showPlayerHUD('倍速: ' + prevRate + 'x');
     } else if (event.code === 'Digit0' || event.code === 'Numpad0') {
       event.preventDefault();
       video.playbackRate = 1.0;
+      savePlaybackRate(1.0);
       showPlayerHUD('倍速: 1.0x (原速)');
     }
   }, true);
+
+  // Persistent playback rate & volume
+  function getSavedPlaybackRate() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('niuyouguo.player.playbackRate');
+        if (saved) {
+          const val = parseFloat(saved);
+          if (val >= 0.5 && val <= 3.0) return val;
+        }
+      }
+    } catch {}
+    return 1.0;
+  }
+
+  function savePlaybackRate(rate) {
+    try {
+      if (typeof localStorage !== 'undefined' && rate >= 0.5 && rate <= 3.0) {
+        localStorage.setItem('niuyouguo.player.playbackRate', String(rate));
+      }
+    } catch {}
+  }
+
+  function getSavedVolume() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('niuyouguo.player.volume');
+        if (saved !== null) {
+          const val = parseFloat(saved);
+          if (!isNaN(val) && val >= 0 && val <= 1) return val;
+        }
+      }
+    } catch {}
+    return 1.0;
+  }
+
+  function saveVolume(vol, muted) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('niuyouguo.player.volume', String(vol));
+        localStorage.setItem('niuyouguo.player.muted', muted ? '1' : '0');
+      }
+    } catch {}
+  }
+
+  window.addEventListener('play', event => {
+    if (event.target && event.target.tagName === 'VIDEO') {
+      const rate = getSavedPlaybackRate();
+      if (rate !== 1.0) {
+        event.target.playbackRate = rate;
+        event.target.defaultPlaybackRate = rate;
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const savedMuted = localStorage.getItem('niuyouguo.player.muted') === '1';
+          event.target.muted = savedMuted;
+          if (!savedMuted) {
+            event.target.volume = getSavedVolume();
+          }
+        }
+      } catch {}
+    }
+  }, true);
+
+  window.addEventListener('ratechange', event => {
+    if (event.target && event.target.tagName === 'VIDEO') {
+      const rate = event.target.playbackRate;
+      if (rate >= 0.5 && rate <= 3.0) {
+        savePlaybackRate(rate);
+      }
+    }
+  }, true);
+
+  window.addEventListener('volumechange', event => {
+    if (event.target && event.target.tagName === 'VIDEO') {
+      saveVolume(event.target.volume, event.target.muted);
+    }
+  }, true);
+
+  // Watch history badge & Continue Watching shelf decorator
+  let cachedWatchHistory = [];
+  async function refreshWatchDecorations() {
+    try {
+      if (typeof window.electronAPI?.getWatchHistory !== 'function') return;
+      const res = await window.electronAPI.getWatchHistory();
+      if (res && res.results && Array.isArray(res.results)) {
+        cachedWatchHistory = res.results;
+      }
+    } catch {
+      return;
+    }
+    updateContinueWatchingShelf();
+    updateBrowseCardsBadges();
+  }
+
+  function updateContinueWatchingShelf() {
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+    const container = document.querySelector('.browse-container');
+    if (!container) return;
+
+    let shelf = document.getElementById('continue-watching-shelf');
+    if (!cachedWatchHistory || cachedWatchHistory.length === 0) {
+      if (shelf) shelf.remove();
+      return;
+    }
+
+    const recent = cachedWatchHistory.find(it => !it.completed) || cachedWatchHistory[0];
+    if (!recent || !recent.series_id) {
+      if (shelf) shelf.remove();
+      return;
+    }
+
+    try {
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('dismiss_cws_' + recent.series_id) === '1') {
+        if (shelf) shelf.remove();
+        return;
+      }
+    } catch {}
+
+    if (!shelf) {
+      shelf = document.createElement('div');
+      shelf.id = 'continue-watching-shelf';
+      shelf.className = 'continue-watching-shelf';
+      const header = container.querySelector('.browse-header');
+      if (header && header.nextSibling) {
+        container.insertBefore(shelf, header.nextSibling);
+      } else {
+        container.prepend(shelf);
+      }
+    }
+
+    const title = recent.series_title || '短剧';
+    const epText = '看到第 ' + (recent.vid_index || 1) + ' 集' + (recent.total > 0 ? ' / 全 ' + recent.total + ' 集' : '');
+    const cover = recent.cover || '';
+
+    shelf.innerHTML = `
+      <div class="cws-left">
+        ${cover ? `<img class="cws-cover" src="${cover}" alt="${title}" />` : ''}
+        <div class="cws-info">
+          <div class="cws-label"><span>▶</span> 继续观看</div>
+          <div class="cws-title">${title}</div>
+          <div class="cws-progress-text">${epText}</div>
+        </div>
+      </div>
+      <div class="cws-right">
+        <button class="cws-btn-play" type="button">▶ 继续播放</button>
+        <button class="cws-btn-close" type="button" title="关闭">✕</button>
+      </div>
+    `;
+
+    const playBtn = shelf.querySelector('.cws-btn-play');
+    if (playBtn) {
+      playBtn.onclick = () => {
+        emit('navigate', { page: 'player', payload: { seriesId: recent.series_id, resume: true, autoplay: true } });
+      };
+    }
+    const closeBtn = shelf.querySelector('.cws-btn-close');
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        try {
+          if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('dismiss_cws_' + recent.series_id, '1');
+          }
+        } catch {}
+        shelf.remove();
+      };
+    }
+  }
+
+  function updateBrowseCardsBadges() {
+    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function' || !cachedWatchHistory.length) return;
+    const titleMap = new Map();
+    for (const it of cachedWatchHistory) {
+      if (it.series_title) titleMap.set(it.series_title.trim(), it);
+      if (it.series_id) titleMap.set(String(it.series_id).trim(), it);
+    }
+
+    const cards = document.querySelectorAll('.browse-card');
+    for (const card of cards) {
+      const titleEl = card.querySelector('.browse-card-title') || card;
+      const titleText = (titleEl.textContent || card.title || '').replace(/^播放：/, '').trim();
+      const matched = titleMap.get(titleText);
+      if (!matched) continue;
+
+      const cover = card.querySelector('.browse-cover');
+      if (!cover) continue;
+
+      let badge = cover.querySelector('.browse-watch-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'browse-watch-badge' + (matched.completed ? ' completed' : '');
+        cover.appendChild(badge);
+      }
+      badge.textContent = matched.completed ? '已看完' : ('已看第 ' + matched.vid_index + ' 集');
+
+      let bar = cover.querySelector('.browse-watch-bar');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'browse-watch-bar';
+        const fill = document.createElement('div');
+        fill.className = 'browse-watch-bar-fill';
+        bar.appendChild(fill);
+        cover.appendChild(bar);
+      }
+      const fill = bar.querySelector('.browse-watch-bar-fill');
+      if (fill) {
+        const pct = matched.completed ? 100 : (matched.total > 0 ? Math.min(100, Math.round(matched.vid_index / matched.total * 100)) : 10);
+        fill.style.width = pct + '%';
+      }
+    }
+  }
+
+  // Hook into watch history event
+  const origWatchCallback = listeners.get('watch-history-updated');
+  if (origWatchCallback) {
+    origWatchCallback.add(() => {
+      refreshWatchDecorations();
+    });
+  }
+
+  // MutationObserver to update badges when switching categories / paging
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body) {
+    let decorTimer = null;
+    const pageObserver = new MutationObserver(() => {
+      clearTimeout(decorTimer);
+      decorTimer = setTimeout(() => {
+        if (document.querySelector('.browse-container')) {
+          refreshWatchDecorations();
+        }
+      }, 150);
+    });
+    try {
+      pageObserver.observe(document.body, { childList: true, subtree: true });
+    } catch {}
+  }
 
   // Auto-dismiss modal when clicking backdrop mask
   window.addEventListener('click', event => {

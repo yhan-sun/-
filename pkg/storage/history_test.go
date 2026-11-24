@@ -82,3 +82,34 @@ func TestLibraryKeepsReportedTotalAndReturnsSnapshots(t *testing.T) {
 		t.Fatal("shared episode slice")
 	}
 }
+
+func TestStoreExportAndImportData(t *testing.T) {
+	home1 := t.TempDir()
+	s1 := newStore(home1)
+	pos := WatchItem{SeriesID: "series-100", VidIndex: 5, CurrentTime: 45.5, SeriesTitle: "导出剧集"}
+	if err := s1.SavePlaybackPosition(pos); err != nil {
+		t.Fatalf("SavePlaybackPosition failed: %v", err)
+	}
+
+	exported := s1.ExportData()
+	if exported.History["series-100"] == nil || exported.History["series-100"].VidIndex != 5 {
+		t.Fatalf("exported data missing series-100: %+v", exported.History)
+	}
+
+	home2 := t.TempDir()
+	s2 := newStore(home2)
+	hCount, sCount, err := s2.ImportData(exported, true)
+	if err != nil {
+		t.Fatalf("ImportData failed: %v", err)
+	}
+	if hCount != 1 {
+		t.Errorf("expected 1 imported history item, got %d", hCount)
+	}
+	_ = sCount
+
+	pos2 := s2.GetPlaybackPosition("series-100")
+	if pos2 == nil || pos2.VidIndex != 5 || pos2.CurrentTime != 45.5 {
+		t.Fatalf("imported position mismatch: %+v", pos2)
+	}
+}
+

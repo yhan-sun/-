@@ -201,3 +201,30 @@ test('nativePictureInPicture is supported and callable', async () => {
   const res = await api.enterNativePictureInPicture();
   assert.equal(typeof res, 'boolean');
 });
+
+test('exportUserData and importUserData bindings are exposed and functional', async () => {
+  const calls = [];
+  const { api } = loadBridge({
+    ExportUserData: async () => {
+      calls.push('export');
+      return { success: true, brand: '牛油果短剧', history: { 'sid-1': { series_title: '测试' } } };
+    },
+    ImportUserData: async payload => {
+      calls.push(['import', payload]);
+      return { success: true, importedHistory: 1, importedSeries: 0 };
+    }
+  });
+
+  assert.equal(typeof api.exportUserData, 'function');
+  assert.equal(typeof api.importUserData, 'function');
+
+  const exported = await api.exportUserData();
+  assert.equal(exported.success, true);
+  assert.equal(exported.brand, '牛油果短剧');
+
+  const imported = await api.importUserData({ history: { 'sid-1': { series_title: '测试' } }, merge: true });
+  assert.equal(imported.success, true);
+  assert.equal(imported.importedHistory, 1);
+  assert.equal(calls.length, 2);
+});
+

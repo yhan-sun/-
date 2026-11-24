@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"hongguo/pkg/storage"
@@ -121,3 +123,79 @@ func (a *App) AcknowledgeWatchUpdates(seriesID string) (interface{}, error) {
 func (a *App) FindSeriesSequels(seriesID string) (interface{}, error) {
 	return map[string]interface{}{"success": true, "sequels": []interface{}{}}, nil
 }
+
+// ExportUserData exports all settings, watch history, and saved series to a JSON map
+func (a *App) ExportUserData() (map[string]interface{}, error) {
+	if a.store == nil {
+		return map[string]interface{}{"success": false, "error": "数据存储未就绪"}, nil
+	}
+	data := a.store.ExportData()
+	return map[string]interface{}{
+		"success":     true,
+		"version":     "7.9.0",
+		"brand":       "牛油果短剧",
+		"exported_at": time.Now().UnixMilli(),
+		"history":     data.History,
+		"series":      data.Series,
+		"settings":    data.Settings,
+	}, nil
+}
+
+// ImportUserData safely merges or restores user backup data
+func (a *App) ImportUserData(payload map[string]interface{}) (map[string]interface{}, error) {
+	if a.store == nil {
+		return map[string]interface{}{"success": false, "error": "数据存储未就绪"}, nil
+	}
+	rawHistory, _ := payload["history"].(map[string]interface{})
+	var storeData storage.StoreData
+	storeData.History = make(map[string]*storage.WatchItem)
+	for sid, raw := range rawHistory {
+		if m, ok := raw.(map[string]interface{}); ok {
+			item := &storage.WatchItem{
+				SeriesID: sid,
+			}
+			if t, ok := m["series_title"].(string); ok {
+				item.SeriesTitle = t
+			}
+			if c, ok := m["cover"].(string); ok {
+				item.Cover = c
+			}
+			if vi, ok := m["vid_index"].(float64); ok {
+				item.VidIndex = int(vi)
+			}
+			if ct, ok := m["currentTime"].(float64); ok {
+				item.CurrentTime = ct
+			}
+			if d, ok := m["duration"].(float64); ok {
+				item.Duration = d
+			}
+			if en, ok := m["episode_name"].(string); ok {
+				item.EpisodeName = en
+			}
+			if v, ok := m["vid"].(string); ok {
+				item.Vid = v
+			}
+			if ed, ok := m["ended"].(bool); ok {
+				item.Ended = ed
+			}
+			storeData.History[sid] = item
+		}
+	}
+	merge, _ := payload["merge"].(bool)
+	hCount, sCount, err := a.store.ImportData(storeData, merge)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+	a.mu.Lock()
+	ctx := a.ctx
+	a.mu.Unlock()
+	if ctx != nil {
+		runtime.EventsEmit(ctx, "watch-history-updated", map[string]interface{}{"imported": true})
+	}
+	return map[string]interface{}{
+		"success":         true,
+		"importedHistory": hCount,
+		"importedSeries":  sCount,
+	}, nil
+}
+
