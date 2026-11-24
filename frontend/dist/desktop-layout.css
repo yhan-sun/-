@@ -60,13 +60,129 @@
   border-bottom: 1px solid var(--border);
 }
 
-.compact-window .compact-navigation {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 56px), 1fr));
+/* ========================================================
+   Portrait & Compact Window Optimization System (竖屏版深度重构)
+   ======================================================== */
+
+.compact-window .compact-navigation,
+.layout-portrait .compact-navigation {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid var(--border, #e4e1dc) !important;
+  background: var(--bg-card, #ffffff) !important;
+  flex-shrink: 0 !important;
 }
 
+.compact-window .compact-navigation::-webkit-scrollbar,
+.layout-portrait .compact-navigation::-webkit-scrollbar {
+  display: none !important;
+}
+
+.compact-window .compact-navigation button,
+.layout-portrait .compact-navigation button {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: var(--text-secondary, #686661) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+}
+
+.compact-window .compact-navigation button:hover,
+.layout-portrait .compact-navigation button:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: var(--text-primary, #252523) !important;
+}
+
+.compact-window .compact-navigation button[aria-current="page"],
+.layout-portrait .compact-navigation button[aria-current="page"] {
+  background: var(--accent, #c8383d) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-color: var(--accent, #c8383d) !important;
+  box-shadow: 0 2px 8px rgba(200, 56, 61, 0.28) !important;
+}
+
+[data-theme="dark"] .compact-window .compact-navigation,
+[data-theme="dark"] .layout-portrait .compact-navigation {
+  background: var(--bg-card, #1c1c22) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .compact-window .compact-navigation button,
+[data-theme="dark"] .layout-portrait .compact-navigation button {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #9ca3af !important;
+}
+
+[data-theme="dark"] .compact-window .compact-navigation button:hover,
+[data-theme="dark"] .layout-portrait .compact-navigation button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f3f4f6 !important;
+}
+
+[data-theme="dark"] .compact-window .compact-navigation button[aria-current="page"],
+[data-theme="dark"] .layout-portrait .compact-navigation button[aria-current="page"] {
+  background: var(--accent, #ed9295) !important;
+  color: #1a1a1e !important;
+  border-color: var(--accent, #ed9295) !important;
+}
+
+/* Portrait Window Toolbar: Never wrap, preserve safe area for macOS traffic lights without collisions */
 .layout-portrait.platform-mac .window-toolbar,
-.compact-window .layout-landscape.platform-mac .window-toolbar {
-  padding-left: calc(104px / var(--interface-zoom, 1));
+.compact-window .layout-landscape.platform-mac .window-toolbar,
+.layout-portrait .window-toolbar {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  padding: 0 12px 0 96px !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  box-sizing: border-box !important;
+}
+
+.layout-portrait .window-toolbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+.layout-portrait .toolbar-actions,
+.compact-window .toolbar-actions {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
+}
+
+.layout-portrait .toolbar-actions .btn,
+.compact-window .toolbar-actions .btn {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  flex-shrink: 0 !important;
 }
 
 .compact-window .browse-container .browse-header {
@@ -76,46 +192,244 @@
   margin-bottom: 12px;
 }
 
-.compact-window .browse-header .page-description {
-  display: none;
+.compact-window .browse-header .page-description,
+.layout-portrait .browse-header .page-description {
+  display: none !important;
 }
 
-.compact-window .browse-container .browse-header-right {
-  justify-content: flex-start;
+.compact-window .browse-container .browse-header-right,
+.layout-portrait .browse-header-right {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  width: 100% !important;
 }
 
-.compact-window .browse-container .source-control {
-  max-width: 100%;
+.compact-window .browse-container .source-control,
+.layout-portrait .source-control {
+  flex: 1 1 calc(50% - 6px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  max-width: 100% !important;
+}
+
+.layout-portrait .browse-header-right .btn,
+.compact-window .browse-header-right .btn {
+  flex: 1 1 calc(50% - 6px) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  box-sizing: border-box !important;
 }
 
 .compact-window .browse-container .source-control select {
   min-width: 0;
 }
 
-.compact-window .browse-container .browse-source-note,
-.compact-window .browse-container .browse-cats,
-.compact-window .browse-container .browse-genres {
-  margin-bottom: 8px;
+/* Horizontal Swipeable Genre Chips & Category Pills */
+.layout-portrait .browse-genres,
+.compact-window .browse-genres {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  gap: 6px !important;
+  padding: 2px 0 6px !important;
+  margin-bottom: 12px !important;
 }
 
-/* Leave space for the macOS window controls and wrap the player actions. */
-.compact-window .player-focused .window-toolbar {
-  height: auto;
-  min-height: 48px;
-  padding-block: 6px;
-  flex-wrap: wrap;
+.layout-portrait .browse-genres::-webkit-scrollbar,
+.compact-window .browse-genres::-webkit-scrollbar {
+  display: none !important;
 }
 
-.compact-window .player-focused .toolbar-page-picker {
-  flex: 0 1 88px;
+.layout-portrait .genre-chip,
+.compact-window .genre-chip {
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
 }
 
-.compact-window .player-focused .toolbar-actions {
-  flex: 1 1 160px;
-  min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
+.layout-portrait .browse-cats,
+.compact-window .browse-cats {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+  gap: 14px !important;
+  padding-bottom: 4px !important;
+  margin-bottom: 10px !important;
+}
+
+.layout-portrait .browse-cats::-webkit-scrollbar,
+.compact-window .browse-cats::-webkit-scrollbar {
+  display: none !important;
+}
+
+.compact-window .player-focused .toolbar-page-picker,
+.layout-portrait .toolbar-page-picker {
+  flex: 0 0 auto !important;
+  width: 96px !important;
+  min-width: 80px !important;
+}
+
+/* Portrait Continue Watching Shelf */
+.layout-portrait .continue-watching-shelf,
+.compact-window .continue-watching-shelf {
+  padding: 8px 12px !important;
+  gap: 10px !important;
+  margin-bottom: 14px !important;
+}
+
+.layout-portrait .cws-title,
+.compact-window .cws-title {
+  max-width: 160px !important;
+  font-size: 13px !important;
+}
+
+.layout-portrait .cws-btn-play,
+.compact-window .cws-btn-play {
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+}
+
+.layout-portrait .cws-cover,
+.layout-portrait .cws-cover-fallback,
+.compact-window .cws-cover,
+.compact-window .cws-cover-fallback {
+  width: 36px !important;
+  height: 48px !important;
+}
+
+/* Portrait Player Layout & Controls Bar: No overlapping controls */
+.layout-portrait.player-focused .main-content[data-page=player] {
+  padding: 10px 14px 24px !important;
+}
+
+.layout-portrait .player-stage {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.layout-portrait .player-controls-bar {
+  padding: 12px 10px 8px !important;
+}
+
+.layout-portrait .player-controls-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: nowrap !important;
+  gap: 4px !important;
+}
+
+.layout-portrait .player-controls-time {
+  font-size: 11px !important;
+  flex: 0 0 auto !important;
+  order: 0 !important;
+}
+
+.layout-portrait .player-controls button {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 4px !important;
+}
+
+.layout-portrait .player-controls-volume input {
+  display: none !important;
+}
+
+.layout-portrait .player-series-row {
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+.layout-portrait .player-series-name {
+  font-size: 18px !important;
+  line-height: 1.3 !important;
+}
+
+/* Portrait 2-Column Responsive Grid */
+.layout-portrait .browse-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px 10px !important;
+  padding-bottom: 60px !important;
+}
+
+.layout-portrait .main-content {
+  padding: 14px 14px 60px !important;
+}
+
+/* Portrait Search & History */
+.layout-portrait .search-grid {
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+.layout-portrait .search-card {
+  padding: 10px !important;
+  gap: 12px !important;
+}
+
+.layout-portrait .search-card-title {
+  font-size: 13.5px !important;
+}
+
+.layout-portrait .input-group {
+  flex-wrap: nowrap !important;
+}
+
+.layout-portrait .input-group .btn {
+  padding-inline: 14px !important;
+  font-size: 13px !important;
+  flex-shrink: 0 !important;
+}
+
+/* Portrait Drama Detail Drawer Modal (Mobile Action Sheet) */
+.layout-portrait .browse-drawer-mask {
+  padding: 48px 12px 16px !important;
+}
+
+.layout-portrait .browse-drawer {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 16px !important;
+}
+
+.layout-portrait .browse-drawer-head,
+.layout-portrait .browse-drawer-body,
+.layout-portrait .browse-drawer-foot {
+  padding: 14px 16px !important;
+}
+
+.layout-portrait .browse-drawer-info {
+  gap: 12px !important;
+}
+
+.layout-portrait .browse-drawer-cover {
+  width: 80px !important;
+  height: 108px !important;
+}
+
+.layout-portrait .browse-drawer-foot {
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.layout-portrait .browse-drawer-foot .btn {
+  flex: 1 1 calc(50% - 4px) !important;
+  justify-content: center !important;
 }
 
 .account-page .account-card + .account-card {
