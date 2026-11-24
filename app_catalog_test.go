@@ -74,4 +74,19 @@ func TestAppBrowseListLive(t *testing.T) {
 		t.Fatalf("expected non-empty comeback items")
 	}
 	t.Logf("Comeback #1: %s (Rank: %d, Label: %s)", it2[0].SeriesTitle, it2[0].Rank, it2[0].EpisodeLabel)
+
+	// 3. SearchSeries test
+	searchRes, err := app.SearchSeries("战神", map[string]interface{}{"page": float64(1)})
+	if err != nil {
+		t.Fatalf("SearchSeries error: %v", err)
+	}
+	sMap, ok := searchRes.(map[string]interface{})
+	if !ok || !sMap["success"].(bool) {
+		t.Fatalf("SearchSeries unsuccessful: %v", searchRes)
+	}
+	results, _ := sMap["results"].([]map[string]interface{})
+	t.Logf("Search '战神' returned %d results", len(results))
+	if len(results) > 0 {
+		t.Logf("First search result: %v", results[0]["series_title"])
+	}
 }
