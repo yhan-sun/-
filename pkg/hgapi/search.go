@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"hongguo/pkg/crypto"
@@ -20,6 +21,16 @@ const (
 	SearchAPI = "https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/search/tab/v"
 	SearchUA  = "com.phoenix.read/72232 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3)"
 )
+
+var (
+	searchCacheMu sync.RWMutex
+	searchCache   = make(map[string]cachedSearchResult)
+)
+
+type cachedSearchResult struct {
+	items     []DramaItem
+	expiresAt time.Time
+}
 
 type DramaItem struct {
 	SeriesID     string `json:"series_id"`
@@ -73,6 +84,16 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 	if page < 1 {
 		page = 1
 	}
+	trimmedKey := strings.TrimSpace(keyword)
+	cacheKey := fmt.Sprintf("%s:%d", trimmedKey, page)
+
+	searchCacheMu.RLock()
+	if cached, ok := searchCache[cacheKey]; ok && time.Now().Before(cached.expiresAt) {
+		searchCacheMu.RUnlock()
+		return cached.items, nil
+	}
+	searchCacheMu.RUnlock()
+
 	offset := (page - 1) * 20
 
 	baseParams := []QueryParam{
@@ -297,6 +318,15 @@ func Search(keyword string, page int, identity *crypto.DeviceIdentity) ([]DramaI
 				})
 			}
 		}
+	}
+
+	if len(results) > 0 {
+		searchCacheMu.Lock()
+		searchCache[cacheKey] = cachedSearchResult{
+			items:     results,
+			expiresAt: time.Now().Add(5 * time.Minute),
+		}
+		searchCacheMu.Unlock()
 	}
 
 	return results, nil

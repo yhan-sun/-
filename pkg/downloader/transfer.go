@@ -51,20 +51,40 @@ func (d *Downloader) transfer(ctx context.Context, task *job) (path string, rece
 	if err != nil {
 		return "", 0, fmt.Errorf("解析片源失败: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
-	if err != nil {
-		return "", 0, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Referer", "https://hongguoduanju.com/")
-	resp, err := d.client.Do(req)
-	if err != nil {
-		return "", 0, fmt.Errorf("请求视频失败: %w", err)
+
+	var resp *http.Response
+	for attempt := 0; attempt < 3; attempt++ {
+		if ctx.Err() != nil {
+			return "", 0, ctx.Err()
+		}
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return "", 0, ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+		if reqErr != nil {
+			return "", 0, reqErr
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("Referer", "https://hongguoduanju.com/")
+		resp, err = d.client.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			break
+		}
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if attempt == 2 {
+			if err != nil {
+				return "", 0, fmt.Errorf("请求视频失败: %w", err)
+			}
+			return "", 0, fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
 
 	dir := filepath.Dir(task.SavePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
