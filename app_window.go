@@ -10,10 +10,9 @@ import (
 func (a *App) SetAlwaysOnTop(onTop bool) (bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.ctx == nil {
-		return false, fmt.Errorf("桌面服务尚未就绪，请重试")
+	if a.ctx != nil {
+		runtime.WindowSetAlwaysOnTop(a.ctx, onTop)
 	}
-	runtime.WindowSetAlwaysOnTop(a.ctx, onTop)
 	a.alwaysOnTop = onTop
 	return onTop, nil
 }
@@ -38,16 +37,13 @@ func (a *App) SetWindowLayout(mode interface{}) (interface{}, error) {
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.ctx == nil {
-		return nil, fmt.Errorf("桌面服务尚未就绪，请重试")
-	}
-	switch modeStr {
-	case "portrait":
-		runtime.WindowSetSize(a.ctx, 420, 800)
-	case "landscape":
-		runtime.WindowSetSize(a.ctx, 1280, 800)
-	default:
-		return nil, fmt.Errorf("未知窗口布局: %s", modeStr)
+	if a.ctx != nil {
+		switch modeStr {
+		case "portrait":
+			runtime.WindowSetSize(a.ctx, 420, 800)
+		case "landscape":
+			runtime.WindowSetSize(a.ctx, 1280, 800)
+		}
 	}
 	a.windowLayout = modeStr
 

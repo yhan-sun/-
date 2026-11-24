@@ -173,7 +173,7 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 		return detail, nil
 	}
 	if ctx == nil {
-		return nil, fmt.Errorf("桌面服务尚未就绪，请重试")
+		ctx = context.Background()
 	}
 
 	if dev == nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -162,7 +163,7 @@ func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 	ctx := a.ctx
 	a.mu.Unlock()
 	if ctx == nil {
-		return nil, fmt.Errorf("桌面服务尚未就绪，请重试")
+		ctx = context.Background()
 	}
 
 	page := 1

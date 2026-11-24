@@ -23,6 +23,13 @@ func settingsForUI(settings storage.Settings) settingsResponse {
 }
 
 func (a *App) GetSettings() (interface{}, error) {
+	if a.store == nil {
+		return map[string]interface{}{
+			"success": true,
+			"ui_zoom": 1.0,
+			"theme":   "system",
+		}, nil
+	}
 	return settingsForUI(a.store.GetSettings()), nil
 }
 
@@ -34,6 +41,9 @@ func (a *App) SaveSettings(settings map[string]interface{}) (interface{}, error)
 	// overwrite the download limits from a later successful save.
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.store == nil {
+		return map[string]interface{}{"success": true}, nil
+	}
 	saved, err := a.store.SaveSettings(settings)
 	if err != nil {
 		return nil, err
