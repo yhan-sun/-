@@ -767,6 +767,282 @@ select:has(+ .custom-select-wrapper),
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+/* Polished Sidebar Items */
+.sidebar-item {
+  padding: 9px 12px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  transition: all 0.16s ease !important;
+  cursor: pointer !important;
+}
+
+.sidebar-item:hover {
+  background: var(--sidebar-hover, #e7e4e0) !important;
+  color: var(--text-primary, #252523) !important;
+}
+
+.sidebar-item.active {
+  background: var(--accent-soft, #fae9e7) !important;
+  color: var(--accent-text, #a5292e) !important;
+  font-weight: 600 !important;
+}
+
+.sidebar-item.active svg {
+  color: var(--accent, #c8383d) !important;
+}
+
+[data-theme="dark"] .sidebar-item.active {
+  background: var(--accent-soft, #42302f) !important;
+  color: var(--accent, #ed9295) !important;
+}
+
+[data-theme="dark"] .sidebar-item.active svg {
+  color: var(--accent, #ed9295) !important;
+}
+
+/* Polished Rank Badges on Posters */
+.browse-rank-badge {
+  position: absolute !important;
+  top: 8px !important;
+  left: 8px !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  color: var(--text-primary, #252523) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-variant-numeric: tabular-nums !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+  z-index: 2 !important;
+  letter-spacing: 0.2px !important;
+}
+
+.browse-rank-badge.rank-top-1 {
+  background: linear-gradient(135deg, rgba(255, 248, 225, 0.95), rgba(255, 224, 130, 0.95)) !important;
+  color: #b78103 !important;
+  border: 1px solid rgba(255, 179, 0, 0.5) !important;
+  box-shadow: 0 2px 8px rgba(255, 179, 0, 0.3) !important;
+}
+
+.browse-rank-badge.rank-top-2 {
+  background: linear-gradient(135deg, rgba(245, 245, 247, 0.95), rgba(229, 229, 234, 0.95)) !important;
+  color: #48484a !important;
+  border: 1px solid rgba(142, 142, 147, 0.4) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.browse-rank-badge.rank-top-3 {
+  background: linear-gradient(135deg, rgba(253, 237, 236, 0.95), rgba(250, 219, 216, 0.95)) !important;
+  color: #c0392b !important;
+  border: 1px solid rgba(231, 76, 60, 0.4) !important;
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.25) !important;
+}
+
+[data-theme="dark"] .browse-rank-badge {
+  background: rgba(28, 28, 34, 0.88) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f1f5f9 !important;
+}
+
+/* Polished Episode Badge */
+.browse-ep-badge {
+  position: absolute !important;
+  bottom: 8px !important;
+  left: 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding: 2px 7px !important;
+  border-radius: 6px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  z-index: 2 !important;
+}
+
+/* Polished Pager Pagination Items */
+.browse-pager {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 24px 0 48px !important;
+  flex-wrap: wrap !important;
+}
+
+.pager-item {
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  color: var(--text-secondary, #686661) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  font-variant-numeric: tabular-nums !important;
+  cursor: pointer !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.pager-item:hover:not(:disabled) {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+  color: var(--text-primary, #252523) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+  transform: translateY(-1px) !important;
+}
+
+.pager-item.active {
+  background: var(--accent, #c8383d) !important;
+  color: #ffffff !important;
+  border-color: var(--accent, #c8383d) !important;
+  box-shadow: 0 2px 8px rgba(200, 56, 61, 0.28) !important;
+  font-weight: 600 !important;
+}
+
+.pager-item:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+[data-theme="dark"] .pager-item {
+  background: rgba(40, 40, 48, 0.75) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .pager-item:hover:not(:disabled) {
+  background: rgba(50, 50, 60, 0.95) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .pager-item.active {
+  background: var(--accent, #ed9295) !important;
+  color: #1e1e24 !important;
+  border-color: var(--accent, #ed9295) !important;
+}
+
+/* Polished Floating Back to Top Button */
+.scroll-to-top-btn {
+  position: fixed !important;
+  bottom: 28px !important;
+  right: 28px !important;
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  color: var(--text-primary, #252523) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  z-index: 9999 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(8px) scale(0.9) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.scroll-to-top-btn.visible {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: translateY(0) scale(1) !important;
+}
+
+.scroll-to-top-btn:hover {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16) !important;
+  transform: translateY(-2px) scale(1.05) !important;
+}
+
+[data-theme="dark"] .scroll-to-top-btn {
+  background: rgba(40, 40, 48, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="dark"] .scroll-to-top-btn:hover {
+  background: rgba(50, 50, 60, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Polished Drama Detail Drawer Modal */
+.browse-drawer-mask {
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  animation: fadeIn 0.2s ease-out !important;
+}
+
+.browse-drawer {
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  border: 1px solid var(--border, #e4e1dc) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+  animation: drawerPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@keyframes drawerPop {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+[data-theme="dark"] .browse-drawer {
+  background: rgba(28, 28, 34, 0.96) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Polished Search Cards & History Filters */
+.search-card {
+  border: 1px solid var(--border, #e4e1dc) !important;
+  border-radius: 12px !important;
+  background: var(--bg-card, #ffffff) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.search-card:hover {
+  background: #ffffff !important;
+  border-color: var(--accent-border, #dfaaa6) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-2px) !important;
+}
+
+.history-filter button {
+  padding: 6px 14px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.history-filter button[aria-pressed=true] {
+  background: var(--accent, #c8383d) !important;
+  color: #ffffff !important;
+  border-color: var(--accent, #c8383d) !important;
+  box-shadow: 0 2px 8px rgba(200, 56, 61, 0.25) !important;
+  font-weight: 600 !important;
+}
+
 /* Polished Form Inputs & Search Fields */
 input[type="text"],
 input[type="search"],

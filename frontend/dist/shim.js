@@ -904,6 +904,60 @@
     }
   }
 
+  function enhanceRankBadges() {
+    if (typeof document === 'undefined') return;
+    const badges = document.querySelectorAll('.browse-rank-badge:not([data-rank-styled])');
+    badges.forEach(b => {
+      b.setAttribute('data-rank-styled', 'true');
+      const text = b.textContent || '';
+      if (text.includes('第 1 名') || text.includes('第1名')) {
+        b.classList.add('rank-top-1');
+      } else if (text.includes('第 2 名') || text.includes('第2名')) {
+        b.classList.add('rank-top-2');
+      } else if (text.includes('第 3 名') || text.includes('第3名')) {
+        b.classList.add('rank-top-3');
+      }
+    });
+  }
+
+  function setupBackToTop() {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return;
+    if (typeof document.querySelector === 'function' && document.querySelector('#scroll-to-top-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'scroll-to-top-btn';
+    btn.className = 'scroll-to-top-btn';
+    btn.setAttribute('aria-label', '回到顶部');
+    btn.setAttribute('title', '回到顶部');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
+
+    btn.addEventListener('click', () => {
+      const activeMain = document.querySelector?.('.main-content:not([hidden])');
+      if (activeMain && typeof activeMain.scrollTo === 'function') {
+        activeMain.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+
+    document.body?.appendChild(btn);
+
+    const checkScroll = (target) => {
+      if (!target) return;
+      if (target.scrollTop > 240) {
+        btn.classList?.add('visible');
+      } else {
+        btn.classList?.remove('visible');
+      }
+    };
+
+    if (typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('.main-content').forEach(el => {
+        el.addEventListener?.('scroll', () => checkScroll(el), { passive: true });
+      });
+    }
+  }
+
   function startDynamicObservers() {
     if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
     const target = document.documentElement || document.body;
@@ -914,6 +968,8 @@
       clearTimeout(decorTimer);
       decorTimer = setTimeout(() => {
         enhanceDropdowns();
+        enhanceRankBadges();
+        setupBackToTop();
         if (document.querySelector('.browse-container')) {
           refreshWatchDecorations();
         }
@@ -930,15 +986,21 @@
       document.addEventListener('DOMContentLoaded', () => {
         startDynamicObservers();
         enhanceDropdowns();
+        enhanceRankBadges();
+        setupBackToTop();
         refreshWatchDecorations();
       });
     } else {
       enhanceDropdowns();
+      enhanceRankBadges();
+      setupBackToTop();
       refreshWatchDecorations();
     }
     // Safety polling so asynchronously rendered React components are always caught
     const pollTimer = setInterval(() => {
       enhanceDropdowns();
+      enhanceRankBadges();
+      setupBackToTop();
     }, 400);
     if (pollTimer && typeof pollTimer.unref === 'function') {
       pollTimer.unref();
@@ -959,7 +1021,7 @@
   window.addEventListener('error', event => {
     if (event.target && event.target.tagName === 'IMG' && !event.target.dataset?.fallback) {
       event.target.dataset.fallback = 'true';
-      event.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="%231a222c"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23566b82" font-family="-apple-system,system-ui,sans-serif" font-size="16">牛油果短剧</text></svg>';
+      event.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="%23edeae5"/><circle cx="150" cy="180" r="36" fill="%23c8383d" opacity="0.15"/><polygon points="144,166 164,180 144,194" fill="%23c8383d" opacity="0.6"/><text x="50%" y="240" dominant-baseline="middle" text-anchor="middle" fill="%238a847c" font-family="-apple-system,system-ui,sans-serif" font-size="14" font-weight="500">牛油果短剧</text></svg>';
     }
   }, true);
 
