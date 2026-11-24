@@ -651,40 +651,21 @@
     });
   }
 
-  // MutationObserver to update badges when switching categories / paging
-  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined' && document.body) {
-    let decorTimer = null;
-    const pageObserver = new MutationObserver(() => {
-      clearTimeout(decorTimer);
-      decorTimer = setTimeout(() => {
-        enhanceDropdowns();
-        if (document.querySelector('.browse-container')) {
-          refreshWatchDecorations();
-        }
-      }, 100);
-    });
-    try {
-      pageObserver.observe(document.body, { childList: true, subtree: true });
-    } catch {}
-  }
-
-  // Universal Custom Select Component (Replaces ugly native OS dropdowns & popups)
+  // Universal Custom Select Component (Theme-adaptive frosted glass dropdown)
   const customSelectMap = new WeakMap();
 
   function makeCustomSelect(select) {
     if (!select || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
-    if (select.closest('.segmented-attached') || select.dataset.noCustom) return;
+    if (select.dataset.noCustom) return;
 
     if (customSelectMap.has(select)) {
       const existing = customSelectMap.get(select);
-      if (existing) syncCustomSelect(select, existing);
-      return;
-    }
-
-    // Hide redundant single-option source selectors
-    if (select.getAttribute('aria-label')?.includes('来源') && select.options.length <= 1) {
-      const parent = select.closest('.source-control') || select.parentElement;
-      if (parent) parent.style.display = 'none';
+      if (existing) {
+        if (!existing.wrapper.parentNode || existing.wrapper.previousSibling !== select) {
+          select.parentNode?.insertBefore(existing.wrapper, select.nextSibling);
+        }
+        syncCustomSelect(select, existing);
+      }
       return;
     }
 
@@ -704,11 +685,16 @@
     wrapper.className = 'custom-select-wrapper';
     if (select.id) wrapper.dataset.for = select.id;
 
+    // Prevent parent <label> clicks from invoking native select
+    wrapper.addEventListener('click', e => e.stopPropagation());
+    wrapper.addEventListener('mousedown', e => e.stopPropagation());
+
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'custom-select-trigger';
     trigger.setAttribute('aria-haspopup', 'listbox');
     trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-label', select.getAttribute('aria-label') || '选择器');
 
     const labelSpan = document.createElement('span');
     labelSpan.className = 'custom-select-label';
@@ -734,8 +720,24 @@
 
     function buildOptions() {
       menu.innerHTML = '';
-      lastOptionCount = select.options.length;
-      const selectedIndex = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      lastOptionCount = select.options ? select.options.length : 0;
+      if (!select.options || select.options.length === 0) {
+        labelSpan.textContent = select.getAttribute('aria-label') || '请选择';
+        return;
+      }
+
+      let selectedIndex = -1;
+      if (select.value) {
+        for (let i = 0; i < select.options.length; i++) {
+          if (select.options[i].value === select.value) {
+            selectedIndex = i;
+            break;
+          }
+        }
+      }
+      if (selectedIndex < 0) {
+        selectedIndex = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      }
       labelSpan.textContent = select.options[selectedIndex]?.text || '';
 
       for (let i = 0; i < select.options.length; i++) {
@@ -743,6 +745,7 @@
         const optDiv = document.createElement('div');
         optDiv.className = 'custom-select-option' + (i === selectedIndex ? ' selected' : '');
         optDiv.setAttribute('role', 'option');
+        optDiv.setAttribute('tabindex', '-1');
         optDiv.dataset.value = opt.value;
         optDiv.dataset.index = String(i);
 
@@ -758,6 +761,7 @@
         optDiv.appendChild(checkSpan);
 
         optDiv.addEventListener('click', e => {
+          e.preventDefault();
           e.stopPropagation();
           const val = optDiv.dataset.value;
           if (select.value !== val) {
@@ -774,6 +778,7 @@
             select.dispatchEvent(new Event('change', { bubbles: true }));
             select.dispatchEvent(new Event('input', { bubbles: true }));
           }
+          sync();
           closeMenu();
         });
 
@@ -782,11 +787,27 @@
     }
 
     function sync() {
-      if (select.options.length !== lastOptionCount) {
+      const currentCount = select.options ? select.options.length : 0;
+      if (currentCount !== lastOptionCount) {
         buildOptions();
         return;
       }
-      const idx = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      if (currentCount === 0) {
+        labelSpan.textContent = select.getAttribute('aria-label') || '请选择';
+        return;
+      }
+      let idx = -1;
+      if (select.value) {
+        for (let i = 0; i < select.options.length; i++) {
+          if (select.options[i].value === select.value) {
+            idx = i;
+            break;
+          }
+        }
+      }
+      if (idx < 0) {
+        idx = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      }
       labelSpan.textContent = select.options[idx]?.text || '';
       const optDivs = menu.querySelectorAll('.custom-select-option');
       optDivs.forEach((div, i) => {
@@ -817,6 +838,7 @@
     }
 
     trigger.addEventListener('click', e => {
+      e.preventDefault();
       e.stopPropagation();
       if (wrapper.classList.contains('open')) {
         closeMenu();
@@ -825,7 +847,20 @@
       }
     });
 
+    trigger.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!wrapper.classList.contains('open')) {
+          openMenu();
+        }
+      } else if (e.key === 'Escape' && wrapper.classList.contains('open')) {
+        e.preventDefault();
+        closeMenu();
+      }
+    });
+
     select.addEventListener('change', sync);
+    select.addEventListener('input', sync);
 
     buildOptions();
     if (select.parentNode) {
@@ -858,7 +893,7 @@
     }
   }, true);
 
-  // Dynamic Dropdown Enhancer: converts all selects into ultra-transparent glassmorphism custom dropdown components
+  // Dynamic Dropdown Enhancer: converts all selects into theme-adaptive acrylic frosted glass custom dropdown components
   function enhanceDropdowns() {
     if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
 
@@ -869,10 +904,46 @@
     }
   }
 
+  function startDynamicObservers() {
+    if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+    const target = document.documentElement || document.body;
+    if (!target) return;
 
-  try {
-    enhanceDropdowns();
-  } catch {}
+    let decorTimer = null;
+    const pageObserver = new MutationObserver(() => {
+      clearTimeout(decorTimer);
+      decorTimer = setTimeout(() => {
+        enhanceDropdowns();
+        if (document.querySelector('.browse-container')) {
+          refreshWatchDecorations();
+        }
+      }, 50);
+    });
+    try {
+      pageObserver.observe(target, { childList: true, subtree: true });
+    } catch {}
+  }
+
+  if (typeof document !== 'undefined') {
+    startDynamicObservers();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        startDynamicObservers();
+        enhanceDropdowns();
+        refreshWatchDecorations();
+      });
+    } else {
+      enhanceDropdowns();
+      refreshWatchDecorations();
+    }
+    // Safety polling so asynchronously rendered React components are always caught
+    const pollTimer = setInterval(() => {
+      enhanceDropdowns();
+    }, 400);
+    if (pollTimer && typeof pollTimer.unref === 'function') {
+      pollTimer.unref();
+    }
+  }
 
 
 
