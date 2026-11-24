@@ -668,7 +668,191 @@
     } catch {}
   }
 
-  // Dynamic Dropdown & Route Enhancer: turns clunky select into sleek segmented pill
+  // Universal Custom Select Component (Replaces ugly native OS dropdowns & popups)
+  const customSelectMap = new WeakMap();
+
+  function makeCustomSelect(select) {
+    if (!select || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
+    if (select.closest('.segmented-attached') || select.dataset.noCustom) return;
+
+    if (customSelectMap.has(select)) {
+      const existing = customSelectMap.get(select);
+      if (existing) syncCustomSelect(select, existing);
+      return;
+    }
+
+    // Hide redundant single-option source selectors
+    if (select.getAttribute('aria-label')?.includes('来源') && select.options.length <= 1) {
+      const parent = select.closest('.source-control') || select.parentElement;
+      if (parent) parent.style.display = 'none';
+      return;
+    }
+
+    // Hide native select visually while keeping it fully interactive for React
+    select.style.setProperty('position', 'absolute', 'important');
+    select.style.setProperty('opacity', '0', 'important');
+    select.style.setProperty('pointer-events', 'none', 'important');
+    select.style.setProperty('width', '0', 'important');
+    select.style.setProperty('height', '0', 'important');
+    select.style.setProperty('margin', '0', 'important');
+    select.style.setProperty('padding', '0', 'important');
+    select.style.setProperty('border', 'none', 'important');
+    select.tabIndex = -1;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-select-wrapper';
+    if (select.id) wrapper.dataset.for = select.id;
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'custom-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'custom-select-label';
+
+    const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    arrowSvg.setAttribute('class', 'custom-select-arrow');
+    arrowSvg.setAttribute('viewBox', '0 0 24 24');
+    arrowSvg.setAttribute('width', '14');
+    arrowSvg.setAttribute('height', '14');
+    arrowSvg.innerHTML = '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+    trigger.appendChild(labelSpan);
+    trigger.appendChild(arrowSvg);
+
+    const menu = document.createElement('div');
+    menu.className = 'custom-select-menu';
+    menu.setAttribute('role', 'listbox');
+
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(menu);
+
+    let lastOptionCount = 0;
+
+    function buildOptions() {
+      menu.innerHTML = '';
+      lastOptionCount = select.options.length;
+      const selectedIndex = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      labelSpan.textContent = select.options[selectedIndex]?.text || '';
+
+      for (let i = 0; i < select.options.length; i++) {
+        const opt = select.options[i];
+        const optDiv = document.createElement('div');
+        optDiv.className = 'custom-select-option' + (i === selectedIndex ? ' selected' : '');
+        optDiv.setAttribute('role', 'option');
+        optDiv.dataset.value = opt.value;
+        optDiv.dataset.index = String(i);
+
+        const textSpan = document.createElement('span');
+        textSpan.className = 'cso-text';
+        textSpan.textContent = opt.text;
+
+        const checkSpan = document.createElement('span');
+        checkSpan.className = 'cso-check';
+        checkSpan.textContent = '✓';
+
+        optDiv.appendChild(textSpan);
+        optDiv.appendChild(checkSpan);
+
+        optDiv.addEventListener('click', e => {
+          e.stopPropagation();
+          const val = optDiv.dataset.value;
+          if (select.value !== val) {
+            try {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement?.prototype || {}, 'value')?.set;
+              if (setter) {
+                setter.call(select, val);
+              } else {
+                select.value = val;
+              }
+            } catch {
+              select.value = val;
+            }
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          closeMenu();
+        });
+
+        menu.appendChild(optDiv);
+      }
+    }
+
+    function sync() {
+      if (select.options.length !== lastOptionCount) {
+        buildOptions();
+        return;
+      }
+      const idx = select.selectedIndex >= 0 ? select.selectedIndex : 0;
+      labelSpan.textContent = select.options[idx]?.text || '';
+      const optDivs = menu.querySelectorAll('.custom-select-option');
+      optDivs.forEach((div, i) => {
+        div.classList.toggle('selected', i === idx);
+      });
+    }
+
+    function openMenu() {
+      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+        if (w !== wrapper) {
+          w.classList.remove('open');
+          w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
+        }
+      });
+      buildOptions();
+      wrapper.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeMenu() {
+      wrapper.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      if (wrapper.classList.contains('open')) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+
+    select.addEventListener('change', sync);
+
+    buildOptions();
+    if (select.parentNode) {
+      select.parentNode.insertBefore(wrapper, select.nextSibling);
+    }
+    customSelectMap.set(select, { wrapper, sync, buildOptions });
+  }
+
+  function syncCustomSelect(select, info) {
+    if (!select || !info) return;
+    info.sync();
+  }
+
+  // Global dismiss handlers for custom select dropdowns
+  window.addEventListener('click', event => {
+    if (!event.target?.closest?.('.custom-select-wrapper')) {
+      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+        w.classList.remove('open');
+        w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+    }
+  }, true);
+
+  window.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
+        w.classList.remove('open');
+        w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
+      });
+    }
+  }, true);
+
+  // Dynamic Dropdown & Route Enhancer: turns clunky select into sleek segmented pill & custom glassmorphism selects
   function enhanceDropdowns() {
     if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
 
@@ -728,11 +912,19 @@
       sel.addEventListener('change', syncActive);
       parent.appendChild(seg);
     }
+
+    // 3. For ALL other select elements, convert to custom glassmorphic select popovers
+    const allSelects = document.querySelectorAll('select');
+    for (const sel of allSelects) {
+      if (sel.closest('.segmented-attached')) continue;
+      makeCustomSelect(sel);
+    }
   }
 
   try {
     enhanceDropdowns();
   } catch {}
+
 
 
   // Auto-dismiss modal when clicking backdrop mask

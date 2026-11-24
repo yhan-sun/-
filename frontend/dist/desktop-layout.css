@@ -455,4 +455,132 @@ select option {
   display: none !important;
 }
 
+/* ========================================================
+   Custom Select Glassmorphism Popover & Trigger Component
+   ======================================================== */
+
+.custom-select-wrapper {
+  position: relative !important;
+  display: inline-flex !important;
+  vertical-align: middle !important;
+  user-select: none !important;
+}
+
+.custom-select-trigger {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  background: rgba(30, 41, 59, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 8px !important;
+  color: #f1f5f9 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  backdrop-filter: blur(12px) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  white-space: nowrap !important;
+}
+
+.custom-select-trigger:hover {
+  background: rgba(51, 65, 85, 0.85) !important;
+  border-color: rgba(76, 175, 80, 0.5) !important;
+}
+
+.custom-select-wrapper.open .custom-select-trigger {
+  border-color: #4caf50 !important;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.22) !important;
+  background: rgba(51, 65, 85, 0.95) !important;
+}
+
+.custom-select-arrow {
+  color: #94a3b8 !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  flex-shrink: 0 !important;
+}
+
+.custom-select-wrapper.open .custom-select-arrow {
+  transform: rotate(180deg) !important;
+  color: #4caf50 !important;
+}
+
+/* Expanded Dropdown Menu */
+.custom-select-menu {
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  min-width: 100% !important;
+  max-width: 320px !important;
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: rgba(23, 32, 48, 0.96) !important;
+  backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 10px !important;
+  padding: 5px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  transform-origin: top center !important;
+  opacity: 0 !important;
+  transform: translateY(-6px) scale(0.97) !important;
+  pointer-events: none !important;
+  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.custom-select-wrapper.open .custom-select-menu {
+  opacity: 1 !important;
+  transform: translateY(0) scale(1) !important;
+  pointer-events: auto !important;
+}
+
+.custom-select-option {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 8px 12px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #cbd5e1 !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+  white-space: nowrap !important;
+}
+
+.custom-select-option:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.custom-select-option.selected {
+  background: rgba(76, 175, 80, 0.18) !important;
+  color: #4caf50 !important;
+  font-weight: 600 !important;
+}
+
+.cso-check {
+  font-size: 12px !important;
+  color: #4caf50 !important;
+  font-weight: 700 !important;
+  opacity: 0 !important;
+  transform: scale(0.6) !important;
+  transition: all 0.12s ease !important;
+}
+
+.custom-select-option.selected .cso-check {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+
 
