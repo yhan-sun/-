@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -152,6 +153,16 @@ func (p *Proxy) Prewarm(seriesID, vid string) {
 
 func (p *Proxy) LocalURL(filePath string) string {
 	return fmt.Sprintf("http://%s/local/?path=%s", p.addr, url.QueryEscape(filePath))
+}
+
+func (p *Proxy) SetCachedBuffer(seriesID, vid string, data []byte) {
+	key := fmt.Sprintf("%s:%s", seriesID, vid)
+	p.setCached(key, data)
+}
+
+func (p *Proxy) GetCachedBuffer(seriesID, vid string) []byte {
+	key := fmt.Sprintf("%s:%s", seriesID, vid)
+	return p.getCached(key)
 }
 
 func (p *Proxy) ClearCache() {
@@ -336,51 +347,65 @@ func (p *Proxy) handleStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Download media
-			req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-			req.Header.Set("Referer", "https://hongguoduanju.com/")
-
-			client := &http.Client{
-				Transport: &http.Transport{
-					Proxy: nil,
-				},
-				Timeout: 45 * time.Second,
-			}
-			resp, err := client.Do(req)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("fetch media failed: %v", err), http.StatusBadGateway)
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				http.Error(w, fmt.Sprintf("fetch media HTTP %d", resp.StatusCode), resp.StatusCode)
-				return
-			}
-
-			rawBytes, err := io.ReadAll(resp.Body)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("read media failed: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			if len(contentKey) > 0 {
-				decrypted, err := cenc.DecryptMp4Buffer(rawBytes, contentKey)
+			// Check if resolver already populated the memory cache
+			if cached := p.getCached(cacheKey); cached != nil {
+				buf = cached
+			} else if strings.HasPrefix(mediaURL, "/") {
+				// Local file path
+				rawBytes, err := os.ReadFile(mediaURL)
 				if err != nil {
-					http.Error(w, fmt.Sprintf("decrypt failed: %v", err), http.StatusInternalServerError)
+					http.Error(w, fmt.Sprintf("read local media failed: %v", err), http.StatusInternalServerError)
 					return
 				}
-				buf = decrypted
-			} else {
 				buf = rawBytes
-			}
+				p.setCached(cacheKey, buf)
+			} else {
+				// Download media via HTTP
+				req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+				req.Header.Set("Referer", "https://hongguoduanju.com/")
 
-			p.setCached(cacheKey, buf)
+				client := &http.Client{
+					Transport: &http.Transport{
+						Proxy: nil,
+					},
+					Timeout: 45 * time.Second,
+				}
+				resp, err := client.Do(req)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("fetch media failed: %v", err), http.StatusBadGateway)
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					http.Error(w, fmt.Sprintf("fetch media HTTP %d", resp.StatusCode), resp.StatusCode)
+					return
+				}
+
+				rawBytes, err := io.ReadAll(resp.Body)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("read media failed: %v", err), http.StatusInternalServerError)
+					return
+				}
+
+				if len(contentKey) > 0 {
+					decrypted, err := cenc.DecryptMp4Buffer(rawBytes, contentKey)
+					if err != nil {
+						http.Error(w, fmt.Sprintf("decrypt failed: %v", err), http.StatusInternalServerError)
+						return
+					}
+					buf = decrypted
+				} else {
+					buf = rawBytes
+				}
+
+				p.setCached(cacheKey, buf)
+			}
 		}
 	}
 

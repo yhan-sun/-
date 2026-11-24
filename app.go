@@ -17,6 +17,7 @@ import (
 	"hongguo/pkg/downloader"
 	"hongguo/pkg/hgapi"
 	"hongguo/pkg/media"
+	"hongguo/pkg/media/decryptor"
 	"hongguo/pkg/storage"
 )
 
@@ -106,6 +107,45 @@ func (a *App) desktopContext() (context.Context, error) {
 
 // resolveStream resolves media URL and content key for proxy streaming & downloading
 func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, []byte, error) {
+	if seriesID == "" && a.store != nil {
+		for _, s := range a.store.GetSeriesList() {
+			for _, ep := range s.Episodes {
+				if ep.Vid == vid {
+					seriesID = s.SeriesID
+					break
+				}
+			}
+			if seriesID != "" {
+				break
+			}
+		}
+	}
+
+	// 1. Try full protected decryption pipeline
+	if seriesID != "" && vid != "" {
+		cachedPath, err := decryptor.EnsureFullEpisode(ctx, seriesID, vid)
+		if err == nil && cachedPath != "" {
+			if fi, err := os.Stat(cachedPath); err == nil && fi.Size() > 100*1024 {
+				a.mu.Lock()
+				proxy := a.proxy
+				a.mu.Unlock()
+				if proxy != nil {
+					if fi.Size() < 50*1024*1024 {
+						if data, readErr := os.ReadFile(cachedPath); readErr == nil {
+							proxy.SetCachedBuffer(seriesID, vid, data)
+						}
+					}
+					log.Printf("[Proxy Resolver] Full episode resolved from disk cache: %s (%d bytes)", cachedPath, fi.Size())
+					return proxy.LocalURL(cachedPath), nil, nil
+				}
+				return cachedPath, nil, nil
+			}
+		} else {
+			log.Printf("[Proxy Resolver] Full episode decryption fallback: %v", err)
+		}
+	}
+
+	// 2. Fallback to mobile V5 API if registered
 	a.mu.Lock()
 	dev := a.dev
 	a.mu.Unlock()
@@ -130,9 +170,9 @@ func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, 
 		log.Printf("[Proxy Resolver] V5 video_tab fallback: %v", err)
 	}
 
-	// Direct public web mp4 fallback (unencrypted standard MP4)
+	// 3. Fallback to direct public web mp4
 	webMediaURL := fmt.Sprintf("https://hongguoduanju.com/video/public/%s/360p.mp4", vid)
-	log.Printf("[Proxy Resolver] Using public web stream: %s", webMediaURL)
+	log.Printf("[Proxy Resolver] Using public web stream fallback: %s", webMediaURL)
 	return webMediaURL, nil, nil
 }
 
@@ -197,7 +237,7 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 		}
 	}
 
-	if detail == nil {
+	if detail == nil || len(detail.Episodes) == 0 {
 		detail, err = hgapi.FetchSeriesEpisodes(ctx, seriesID)
 		if err != nil {
 			return nil, err

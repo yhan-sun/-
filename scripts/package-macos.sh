@@ -21,6 +21,17 @@ mkdir -p "${MACOS}" "${RESOURCES}"
 cp "bin/niuyouguo-player" "${MACOS}/niuyouguo-player"
 chmod +x "${MACOS}/niuyouguo-player"
 
+if [ -f "bin/ffmpeg" ]; then
+    echo "=== Bundling ffmpeg ==="
+    cp "bin/ffmpeg" "${MACOS}/ffmpeg"
+    chmod +x "${MACOS}/ffmpeg"
+fi
+
+echo "=== Bundling decryptor worker assets ==="
+mkdir -p "${RESOURCES}/decryptor"
+cp pkg/media/decryptor/xg_worker.js "${RESOURCES}/decryptor/"
+cp pkg/media/decryptor/decrypt_helper.cjs "${RESOURCES}/decryptor/"
+
 cat << 'EOF' > "${CONTENTS}/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
