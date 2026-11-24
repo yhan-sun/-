@@ -86,10 +86,12 @@ type catalogGenre struct {
 }
 
 var catalogGenres = []catalogGenre{
-	{"hot", "热播"}, {"urban", "都市"}, {"counterattack", "逆袭"}, {"godofwar", "战神"},
-	{"costume", "古装"}, {"sweet", "甜宠"}, {"angst", "虐恋"}, {"fantasy", "玄幻"},
-	{"tycoon", "神豪"}, {"rebirth", "重生"}, {"traversal", "穿越"}, {"doctor", "神医"},
-	{"soninlaw", "赘婿"}, {"disguise", "马甲"}, {"baby", "萌宝"}, {"suspense", "悬疑"}, {"comic", "动漫"},
+	{"hot", "热播"}, {"comeback", "逆袭"}, {"urban", "都市"}, {"costume", "古装"},
+	{"suspense", "悬疑"}, {"romance", "甜宠/爱情"}, {"family", "家庭"}, {"cute-kids", "萌宝"},
+	{"fantasy", "玄幻"}, {"period", "年代"}, {"legend", "传奇"}, {"growth", "成长"},
+	{"comedy", "喜剧"}, {"sci-fi", "科幻"}, {"drama", "剧情"}, {"thriller", "惊悚"},
+	{"godofwar", "战神"}, {"tycoon", "神豪"}, {"rebirth", "重生"}, {"traversal", "穿越"},
+	{"doctor", "神医"}, {"soninlaw", "赘婿"}, {"disguise", "马甲"}, {"comic", "动漫"},
 }
 
 func (a *App) BrowseCategories() (interface{}, error) {
@@ -130,15 +132,34 @@ func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 	if source, _ := options["source"].(string); source != "" && source != "hongguo" {
 		return nil, fmt.Errorf("当前桌面版未接入此来源")
 	}
-	if channel, _ := options["catalogChannel"].(string); channel == "web" {
-		return nil, fmt.Errorf("当前桌面版未接入官网片单，请切换到 App 目录")
-	}
 	a.mu.Lock()
-	dev, ctx := a.dev, a.ctx
+	ctx := a.ctx
 	a.mu.Unlock()
 	if ctx == nil {
 		return nil, fmt.Errorf("桌面服务尚未就绪，请重试")
 	}
+
+	page := 1
+	if value, ok := options["page"].(float64); ok && value >= 1 {
+		page = int(value)
+	}
+	category, _ := options["category"].(string)
+	genre, _ := options["genre"].(string)
+	forceRefresh, _ := options["forceRefresh"].(bool)
+
+	// 1. Try official high-quality ranking & category catalog first (hongguoduanju.com)
+	offResult, offErr := hgapi.FetchOfficialCatalog(ctx, category, genre, page, forceRefresh)
+	if offErr == nil && offResult != nil && len(offResult.Items) > 0 {
+		return catalogPage(offResult.Items, offResult.HasMore, category), nil
+	}
+	if offErr != nil {
+		log.Printf("[App] Official catalog fetch failed (%v), falling back to Landpage/Search", offErr)
+	}
+
+	// 2. Fallback to App Landpage / Search if official web endpoint fails or returns empty
+	a.mu.Lock()
+	dev := a.dev
+	a.mu.Unlock()
 	if dev == nil {
 		var err error
 		dev, err = device.RegisterDevice()
@@ -151,12 +172,6 @@ func (a *App) BrowseList(options map[string]interface{}) (interface{}, error) {
 		a.mu.Unlock()
 	}
 
-	page := 1
-	if value, ok := options["page"].(float64); ok && value >= 1 {
-		page = int(value)
-	}
-	category, _ := options["category"].(string)
-	genre, _ := options["genre"].(string)
 	const pageSize = 20
 	if genre == "" || genre == "all" || genre == "hot" {
 		group := "default"

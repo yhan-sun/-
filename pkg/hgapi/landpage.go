@@ -32,6 +32,7 @@ type DramaCatalogItem struct {
 	Score            string   `json:"score"`
 	Tags             []string `json:"tags"`
 	Description      string   `json:"description"`
+	Rank             int      `json:"rank,omitempty"`
 }
 
 type CatalogResult struct {
