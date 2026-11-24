@@ -264,15 +264,22 @@ func GetEpisodeCacheDir() (string, error) {
 	return dir, nil
 }
 
+// EpisodeCachePath returns the deterministic local cache path for an episode.
+func EpisodeCachePath(seriesID, vid string) string {
+	cacheDir, err := GetEpisodeCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cacheDir, fmt.Sprintf("%s_%s.mp4", seriesID, vid))
+}
+
 // EnsureFullEpisode resolves, decrypts, and muxes the full episode into local disk cache.
 // If the full episode already exists on disk, it returns immediately.
 func EnsureFullEpisode(ctx context.Context, seriesID, vid string) (string, error) {
-	cacheDir, err := GetEpisodeCacheDir()
-	if err != nil {
-		return "", err
+	destPath := EpisodeCachePath(seriesID, vid)
+	if destPath == "" {
+		return "", fmt.Errorf("unable to resolve episode cache path")
 	}
-
-	destPath := filepath.Join(cacheDir, fmt.Sprintf("%s_%s.mp4", seriesID, vid))
 	if fi, err := os.Stat(destPath); err == nil && fi.Size() > 100*1024 {
 		return destPath, nil
 	}

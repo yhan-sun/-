@@ -63,6 +63,9 @@ func (s *Store) UpsertSeries(seriesID, title, cover string, total, webAccessible
 }
 
 func (s *Store) GetSeries(seriesID string) *SeriesItem {
+	if realID, ok := KnownCorruptedSeriesIDs[seriesID]; ok {
+		seriesID = realID
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	item := s.data.Series[seriesID]

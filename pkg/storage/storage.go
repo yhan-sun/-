@@ -54,6 +54,17 @@ func newStore(home string) *Store {
 	return s
 }
 
+// KnownCorruptedSeriesIDs maps IEEE-754 float64 truncated series IDs to their true 19-digit IDs.
+var KnownCorruptedSeriesIDs = map[string]string{
+	"7319420724530121728": "7319422485324106761",
+	"7491954541617761280": "7491954541617761305",
+	"7563618362836667392": "7563618362836667416",
+	"7691205385629223936": "7691205385629223960",
+	"7704577081954274304": "7704577081954274328",
+	"7706404415887903744": "7706404415887903806",
+	"7709114780467858432": "7709114780467858456",
+}
+
 func (s *Store) load() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -81,6 +92,47 @@ func (s *Store) load() {
 	if d.Series != nil {
 		s.data.Series = d.Series
 	}
+
+	// Auto-heal known float64-truncated series IDs on load
+	needSave := false
+	for oldID, newID := range KnownCorruptedSeriesIDs {
+		if s.migrateSeriesIDLocked(oldID, newID) {
+			needSave = true
+		}
+	}
+	if needSave {
+		_ = s.save()
+	}
+}
+
+func (s *Store) migrateSeriesIDLocked(oldID, newID string) bool {
+	changed := false
+	if item, exists := s.data.Series[oldID]; exists && item != nil {
+		item.SeriesID = newID
+		s.data.Series[newID] = item
+		delete(s.data.Series, oldID)
+		changed = true
+	}
+	if hist, exists := s.data.History[oldID]; exists && hist != nil {
+		hist.SeriesID = newID
+		s.data.History[newID] = hist
+		delete(s.data.History, oldID)
+		changed = true
+	}
+	return changed
+}
+
+// MigrateSeriesID migrates a series ID to a new ID in both series and history
+func (s *Store) MigrateSeriesID(oldID, newID string) error {
+	if oldID == "" || newID == "" || oldID == newID {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.migrateSeriesIDLocked(oldID, newID) {
+		return s.save()
+	}
+	return nil
 }
 
 func (s *Store) save() error {

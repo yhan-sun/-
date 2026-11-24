@@ -9,6 +9,7 @@ import (
 )
 
 func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float64, metadata map[string]interface{}) (bool, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	if a.store == nil {
 		return false, nil
 	}
@@ -39,6 +40,7 @@ func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float6
 }
 
 func (a *App) GetPlaybackPosition(seriesID string) (*storage.WatchItem, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	if a.store == nil {
 		return nil, nil
 	}
@@ -53,6 +55,7 @@ func (a *App) GetWatchHistory() (interface{}, error) {
 }
 
 func (a *App) RemoveWatchHistory(seriesID string) (interface{}, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	if a.store != nil {
 		if err := a.store.RemoveWatchHistory(seriesID); err != nil {
 			return nil, err

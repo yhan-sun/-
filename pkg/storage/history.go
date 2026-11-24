@@ -64,6 +64,9 @@ func (s *Store) SavePlaybackPosition(position WatchItem) error {
 }
 
 func (s *Store) GetPlaybackPosition(seriesID string) *WatchItem {
+	if realID, ok := KnownCorruptedSeriesIDs[seriesID]; ok {
+		seriesID = realID
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if item := s.data.History[seriesID]; item != nil {

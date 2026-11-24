@@ -174,13 +174,17 @@ func FetchVideoDetail(ctx context.Context, seriesID string, identity *crypto.Dev
 		} `json:"data"`
 	}
 
-	if err := json.Unmarshal(respBytes, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(respBytes))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("unmarshal video_detail: %w", err)
 	}
 
 	vd := raw.Data.VideoData
 	var sid string
 	switch s := vd.SeriesID.(type) {
+	case json.Number:
+		sid = s.String()
 	case string:
 		sid = s
 	case float64:
@@ -194,6 +198,8 @@ func FetchVideoDetail(ctx context.Context, seriesID string, identity *crypto.Dev
 	for i, v := range vd.VideoList {
 		var epVid string
 		switch ev := v.Vid.(type) {
+		case json.Number:
+			epVid = ev.String()
 		case string:
 			epVid = ev
 		case float64:

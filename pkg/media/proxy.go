@@ -113,6 +113,29 @@ func (p *Proxy) Prewarm(seriesID, vid string) {
 			return
 		}
 
+		// If mediaURL is already a local file path or local proxy file
+		localPath := ""
+		if strings.HasPrefix(mediaURL, "/") {
+			localPath = mediaURL
+		} else if strings.Contains(mediaURL, "/local/?path=") {
+			parts := strings.Split(mediaURL, "/local/?path=")
+			if len(parts) > 1 {
+				unescaped, _ := url.QueryUnescape(parts[1])
+				localPath = unescaped
+			}
+		}
+
+		if localPath != "" {
+			if fi, err := os.Stat(localPath); err == nil && fi.Size() > 0 {
+				if fi.Size() < 50*1024*1024 {
+					if data, err := os.ReadFile(localPath); err == nil {
+						p.setCached(cacheKey, data)
+					}
+				}
+				return
+			}
+		}
+
 		req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)
 		if err != nil {
 			return
@@ -348,17 +371,25 @@ func (p *Proxy) handleStream(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Check if resolver already populated the memory cache
+			localFilePath := ""
+			if strings.HasPrefix(mediaURL, "/") {
+				localFilePath = mediaURL
+			} else if strings.Contains(mediaURL, "/local/?path=") {
+				parts := strings.Split(mediaURL, "/local/?path=")
+				if len(parts) > 1 {
+					unescaped, _ := url.QueryUnescape(parts[1])
+					localFilePath = unescaped
+				}
+			}
+
+			if localFilePath != "" {
+				w.Header().Set("Content-Type", "video/mp4")
+				http.ServeFile(w, r, localFilePath)
+				return
+			}
+
 			if cached := p.getCached(cacheKey); cached != nil {
 				buf = cached
-			} else if strings.HasPrefix(mediaURL, "/") {
-				// Local file path
-				rawBytes, err := os.ReadFile(mediaURL)
-				if err != nil {
-					http.Error(w, fmt.Sprintf("read local media failed: %v", err), http.StatusInternalServerError)
-					return
-				}
-				buf = rawBytes
-				p.setCached(cacheKey, buf)
 			} else {
 				// Download media via HTTP
 				req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)

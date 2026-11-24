@@ -31,6 +31,7 @@ type App struct {
 	mu           sync.Mutex
 	registered   bool
 	seriesMap    map[string]*hgapi.SeriesDetail
+	healedIDs    map[string]string
 	alwaysOnTop  bool
 	windowLayout string
 }
@@ -42,6 +43,7 @@ func NewApp() *App {
 		store:        store,
 		windowLayout: "landscape",
 		seriesMap:    make(map[string]*hgapi.SeriesDetail),
+		healedIDs:    make(map[string]string),
 	}
 }
 
@@ -105,8 +107,88 @@ func (a *App) desktopContext() (context.Context, error) {
 	return a.ctx, nil
 }
 
+// HealSeriesID checks if a seriesID has suffered IEEE-754 float64 truncation and heals it.
+func (a *App) HealSeriesID(seriesID string) string {
+	seriesID = strings.TrimSpace(seriesID)
+	if seriesID == "" {
+		return ""
+	}
+	if realID, ok := storage.KnownCorruptedSeriesIDs[seriesID]; ok {
+		return realID
+	}
+
+	a.mu.Lock()
+	if a.healedIDs == nil {
+		a.healedIDs = make(map[string]string)
+	}
+	if healed, ok := a.healedIDs[seriesID]; ok {
+		a.mu.Unlock()
+		return healed
+	}
+	a.mu.Unlock()
+
+	// If numeric seriesID >= 18 digits, check if it exists in store under a different ID by matching title or proximity
+	if len(seriesID) >= 18 && a.store != nil {
+		// 1. Proximity matching with series in store
+		var idNum int64
+		if _, err := fmt.Sscanf(seriesID, "%d", &idNum); err == nil && idNum > 100000000000000000 {
+			for _, s := range a.store.GetSeriesList() {
+				var candNum int64
+				if _, err := fmt.Sscanf(s.SeriesID, "%d", &candNum); err == nil {
+					diff := idNum - candNum
+					if diff < 0 {
+						diff = -diff
+					}
+					if diff < 256 {
+						a.mu.Lock()
+						a.healedIDs[seriesID] = s.SeriesID
+						a.mu.Unlock()
+						_ = a.store.MigrateSeriesID(seriesID, s.SeriesID)
+						return s.SeriesID
+					}
+				}
+			}
+		}
+
+		// 2. Title matching
+		title := ""
+		if item := a.store.GetSeries(seriesID); item != nil && item.SeriesTitle != "" {
+			title = item.SeriesTitle
+		}
+		if title == "" {
+			if pos := a.store.GetPlaybackPosition(seriesID); pos != nil && pos.SeriesTitle != "" {
+				title = pos.SeriesTitle
+			}
+		}
+
+		if title != "" {
+			a.mu.Lock()
+			dev := a.dev
+			a.mu.Unlock()
+			if dev != nil {
+				items, err := hgapi.Search(title, 1, dev)
+				if err == nil {
+					for _, it := range items {
+						if it.SeriesTitle == title || strings.Contains(it.SeriesTitle, title) || strings.Contains(title, it.SeriesTitle) {
+							a.mu.Lock()
+							a.healedIDs[seriesID] = it.SeriesID
+							a.mu.Unlock()
+							_ = a.store.MigrateSeriesID(seriesID, it.SeriesID)
+							return it.SeriesID
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return seriesID
+}
+
 // resolveStream resolves media URL and content key for proxy streaming & downloading
 func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, []byte, error) {
+	seriesID = a.HealSeriesID(seriesID)
+
 	if seriesID == "" && a.store != nil {
 		for _, s := range a.store.GetSeriesList() {
 			for _, ep := range s.Episodes {
@@ -136,7 +218,7 @@ func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, 
 						}
 					}
 					log.Printf("[Proxy Resolver] Full episode resolved from disk cache: %s (%d bytes)", cachedPath, fi.Size())
-					return proxy.LocalURL(cachedPath), nil, nil
+					return cachedPath, nil, nil
 				}
 				return cachedPath, nil, nil
 			}
@@ -178,6 +260,7 @@ func (a *App) resolveStream(ctx context.Context, seriesID, vid string) (string, 
 
 // ensureSeries fetches and registers drama metadata into store
 func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	a.mu.Lock()
 	cached, ok := a.seriesMap[seriesID]
 	dev, ctx := a.dev, a.ctx
@@ -266,6 +349,7 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 
 // SearchResolve gets series details and full episode list
 func (a *App) SearchResolve(seriesID string) (interface{}, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	detail, err := a.ensureSeries(seriesID)
 	if err != nil {
 		log.Printf("[App] SearchResolve error: %v", err)
@@ -283,6 +367,7 @@ func (a *App) SearchResolve(seriesID string) (interface{}, error) {
 
 // GetSeriesEpisodes returns the episode list for a series
 func (a *App) GetSeriesEpisodes(seriesID string) (interface{}, error) {
+	seriesID = a.HealSeriesID(seriesID)
 	detail, err := a.ensureSeries(seriesID)
 	if err != nil {
 		return map[string]interface{}{
@@ -300,7 +385,7 @@ func (a *App) GetSeriesEpisodes(seriesID string) (interface{}, error) {
 // PrepareOnlinePlay prepares a streaming URL for an episode
 func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, error) {
 	vid, _ := payload["vid"].(string)
-	seriesID, _ := payload["seriesId"].(string)
+	rawSeriesID, _ := payload["seriesId"].(string)
 
 	if vid == "" {
 		return map[string]interface{}{
@@ -309,12 +394,46 @@ func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, er
 		}, nil
 	}
 
+	seriesID := a.HealSeriesID(rawSeriesID)
+
 	a.mu.Lock()
 	proxy := a.proxy
 	a.mu.Unlock()
 	if seriesID == "" || proxy == nil {
 		return map[string]interface{}{"success": false, "error": "播放服务尚未就绪或缺少剧集信息"}, nil
 	}
+
+	// 1. Fast path: check if episode already exists in disk cache
+	cachedPath := decryptor.EpisodeCachePath(seriesID, vid)
+	if cachedPath != "" {
+		if fi, err := os.Stat(cachedPath); err == nil && fi.Size() > 100*1024 {
+			log.Printf("[PrepareOnlinePlay] Episode %s:%s is already cached (%d bytes)", seriesID, vid, fi.Size())
+
+			// Prewarm next episode in background for instant transition
+			if vIdx, ok := payload["vidIndex"].(float64); ok && int(vIdx) > 0 {
+				nextIdx := int(vIdx) + 1
+				if detail := a.store.GetSeries(seriesID); detail != nil {
+					for _, ep := range detail.Episodes {
+						if ep.VidIndex == nextIdx && ep.Vid != "" {
+							proxy.Prewarm(seriesID, ep.Vid)
+							break
+						}
+					}
+				}
+			}
+
+			return map[string]interface{}{
+				"success":   true,
+				"url":       proxy.LocalURL(cachedPath),
+				"streamId":  vid,
+				"cached":    true, // Tell frontend it is cached: skip buffering overlay!
+				"streaming": false,
+				"codec":     "h264",
+			}, nil
+		}
+	}
+
+	// 2. Otherwise start prewarming / streaming
 	streamURL := proxy.StreamURL(seriesID, vid)
 	proxy.Prewarm(seriesID, vid)
 
@@ -343,10 +462,13 @@ func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, er
 
 // PlaySeries navigates to or prepares playback
 func (a *App) PlaySeries(payload map[string]interface{}) (interface{}, error) {
-	seriesID, _ := payload["seriesId"].(string)
-	if strings.TrimSpace(seriesID) == "" {
+	rawSeriesID, _ := payload["seriesId"].(string)
+	if strings.TrimSpace(rawSeriesID) == "" {
 		return map[string]interface{}{"success": false, "error": "缺少剧集 ID"}, nil
 	}
+	seriesID := a.HealSeriesID(rawSeriesID)
+	payload["seriesId"] = seriesID
+
 	ctx, err := a.desktopContext()
 	if err != nil {
 		return nil, err
@@ -386,7 +508,8 @@ func (a *App) ReleaseOnlinePlay(payload map[string]interface{}) (interface{}, er
 
 // PromoteOnlinePlay handles prefetching promotion
 func (a *App) PromoteOnlinePlay(payload map[string]interface{}) (interface{}, error) {
-	seriesID, _ := payload["seriesId"].(string)
+	rawSeriesID, _ := payload["seriesId"].(string)
+	seriesID := a.HealSeriesID(rawSeriesID)
 	vid, _ := payload["vid"].(string)
 	if seriesID != "" && vid != "" {
 		a.mu.Lock()
