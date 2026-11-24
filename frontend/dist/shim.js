@@ -132,7 +132,13 @@
     }),
     getSeriesList: (options = {}) => invoke('getSeriesList', [options]),
     getDownloadTasks: (options = {}) => invoke('getDownloadTasks', [options]),
-    getPlaybackPosition: seriesId => invoke('getPlaybackPosition', [seriesId]),
+    getPlaybackPosition: async seriesId => {
+      try {
+        return (await invoke('getPlaybackPosition', [seriesId])) || { series_id: String(seriesId), vid_index: 1, currentTime: 0 };
+      } catch {
+        return { series_id: String(seriesId), vid_index: 1, currentTime: 0 };
+      }
+    },
     savePlaybackPosition: (...args) => invoke('savePlaybackPosition', args),
     selectFolder: () => invoke('selectFolder', []),
     getSettings,

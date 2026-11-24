@@ -145,6 +145,33 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 	if ok && cached != nil {
 		return cached, nil
 	}
+	if item := a.store.GetSeries(seriesID); item != nil && len(item.Episodes) > 0 {
+		eps := make([]hgapi.Episode, len(item.Episodes))
+		for i, ep := range item.Episodes {
+			eps[i] = hgapi.Episode{
+				Vid:          ep.Vid,
+				VidIndex:     ep.VidIndex,
+				Title:        ep.Title,
+				SeriesID:     item.SeriesID,
+				SeriesTitle:  item.SeriesTitle,
+				Cover:        ep.Cover,
+				WebAvailable: true,
+				Locked:       false,
+			}
+		}
+		detail := &hgapi.SeriesDetail{
+			SeriesID:              item.SeriesID,
+			SeriesTitle:           item.SeriesTitle,
+			Cover:                 item.Cover,
+			Total:                 item.Total,
+			WebAccessibleEpisodes: item.Total,
+			Episodes:              eps,
+		}
+		a.mu.Lock()
+		a.seriesMap[seriesID] = detail
+		a.mu.Unlock()
+		return detail, nil
+	}
 	if ctx == nil {
 		return nil, fmt.Errorf("桌面服务尚未就绪，请重试")
 	}

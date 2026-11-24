@@ -62,6 +62,18 @@ func (s *Store) UpsertSeries(seriesID, title, cover string, total, webAccessible
 	return nil
 }
 
+func (s *Store) GetSeries(seriesID string) *SeriesItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	item := s.data.Series[seriesID]
+	if item == nil || item.Forgotten || item.Dismissed {
+		return nil
+	}
+	snapshot := *item
+	snapshot.Episodes = slices.Clone(item.Episodes)
+	return &snapshot
+}
+
 func (s *Store) GetSeriesList() []*SeriesItem {
 	s.mu.RLock()
 	list := make([]*SeriesItem, 0, len(s.data.Series))

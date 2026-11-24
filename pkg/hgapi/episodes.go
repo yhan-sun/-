@@ -180,6 +180,10 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 		episodes := make([]Episode, len(vidListRaw))
 		for i, v := range vidListRaw {
 			vid := fmt.Sprintf("%v", v)
+			locked := false
+			if countErr == nil && accessibleCnt > 0 && i >= accessibleCnt {
+				locked = true
+			}
 			episodes[i] = Episode{
 				Vid:          vid,
 				VidIndex:     i + 1,
@@ -187,8 +191,8 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 				SeriesID:     sid,
 				SeriesTitle:  seriesTitle,
 				Cover:        cover,
-				WebAvailable: i < accessibleCnt,
-				Locked:       countErr == nil && accessibleCnt >= 0 && i >= accessibleCnt,
+				WebAvailable: true,
+				Locked:       locked,
 			}
 		}
 
