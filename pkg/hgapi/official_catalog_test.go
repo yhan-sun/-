@@ -75,3 +75,26 @@ func TestFetchOfficialCatalogGenre(t *testing.T) {
 	first := result.Items[0]
 	t.Logf("Comeback #1: %s (Tags: %v)", first.SeriesTitle, first.Tags)
 }
+
+func TestFetchOfficialCatalogHotSubranks(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resultReal, err := FetchOfficialCatalog(ctx, "hot-real-drama", "", 1, false)
+	if err != nil {
+		t.Fatalf("FetchOfficialCatalog hot-real-drama error: %v", err)
+	}
+	if len(resultReal.Items) == 0 {
+		t.Fatalf("expected non-empty hot-real-drama items")
+	}
+	t.Logf("Fetched %d hot-real-drama items, #1: %s (Rank: %d)", len(resultReal.Items), resultReal.Items[0].SeriesTitle, resultReal.Items[0].Rank)
+
+	resultComic, err := FetchOfficialCatalog(ctx, "hot-comic-drama", "", 1, false)
+	if err != nil {
+		t.Fatalf("FetchOfficialCatalog hot-comic-drama error: %v", err)
+	}
+	if len(resultComic.Items) == 0 {
+		t.Fatalf("expected non-empty hot-comic-drama items")
+	}
+	t.Logf("Fetched %d hot-comic-drama items, #1: %s (Rank: %d)", len(resultComic.Items), resultComic.Items[0].SeriesTitle, resultComic.Items[0].Rank)
+}

@@ -118,7 +118,7 @@ func FetchOfficialCatalog(ctx context.Context, category, genre string, page int,
 	officialSlug, isRank := normalizeOfficialGenre(genre)
 
 	// Determine if this is a rank request
-	if category == "hot-drama" || isRank {
+	if strings.HasPrefix(category, "hot-") || category == "hot-drama" || isRank {
 		result, err := fetchOfficialRank(ctx, category)
 		if err == nil && result != nil && len(result.Items) > 0 {
 			cacheCatalogResult(cacheKey, result, 5*time.Minute)
