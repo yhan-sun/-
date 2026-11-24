@@ -253,7 +253,9 @@ func (a *App) DeleteSeriesFiles(seriesID string) (interface{}, error) {
 			_, _ = a.DeleteTasksWithFiles(toDelete, true)
 		}
 	}
-	_ = a.store.ForgetSeries(seriesID)
+	if a.store != nil {
+		_ = a.store.ForgetSeries(seriesID)
+	}
 	return map[string]interface{}{"success": true}, nil
 }
 

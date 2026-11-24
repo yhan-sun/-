@@ -55,4 +55,16 @@ func TestDownloadFormAndBatchActions(t *testing.T) {
 	if err != nil || result.(map[string]interface{})["count"] != 1 || result.(map[string]interface{})["freed"] != int64(0) {
 		t.Fatalf("delete response: %v, %v", result, err)
 	}
+
+	// Test DeleteSeriesFiles
+	delRes, err := app.DeleteSeriesFiles("1234567890123456789")
+	if err != nil || !delRes.(map[string]interface{})["success"].(bool) {
+		t.Fatalf("DeleteSeriesFiles failed: %v", err)
+	}
+
+	// Test DeleteAllDownloaded
+	delAllRes, err := app.DeleteAllDownloaded(false)
+	if err != nil || !delAllRes.(map[string]interface{})["success"].(bool) {
+		t.Fatalf("DeleteAllDownloaded failed: %v", err)
+	}
 }

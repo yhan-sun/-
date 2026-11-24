@@ -99,7 +99,11 @@
     warmSeriesProgress: 'WarmSeriesProgress',
     searchWindowShow: 'SearchWindowShow',
     setStealthMode: 'SetStealthMode',
-    setBossKey: 'SetBossKey'
+    setBossKey: 'SetBossKey',
+    toggleMaximize: 'ToggleMaximize',
+    toggleFullscreen: 'ToggleFullscreen',
+    isMaximized: 'IsMaximized',
+    isFullscreen: 'IsFullscreen'
   };
   async function invoke(method, args) {
     const app = await getApp();

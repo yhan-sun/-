@@ -73,3 +73,60 @@ func (a *App) SetStealthMode(enabled bool) (interface{}, error) {
 func (a *App) SetBossKey(config map[string]interface{}) (interface{}, error) {
 	return map[string]interface{}{"success": true}, nil
 }
+
+// ToggleMaximize toggles window maximization / restoration
+func (a *App) ToggleMaximize() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, fmt.Errorf("桌面服务尚未就绪，请重试")
+	}
+	runtime.WindowToggleMaximise(a.ctx)
+	return runtime.WindowIsMaximised(a.ctx), nil
+}
+
+// ToggleFullscreen toggles fullscreen mode
+func (a *App) ToggleFullscreen() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, fmt.Errorf("桌面服务尚未就绪，请重试")
+	}
+	if runtime.WindowIsFullscreen(a.ctx) {
+		runtime.WindowUnfullscreen(a.ctx)
+		return false, nil
+	}
+	runtime.WindowFullscreen(a.ctx)
+	return true, nil
+}
+
+// IsMaximized returns whether window is maximized
+func (a *App) IsMaximized() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, nil
+	}
+	return runtime.WindowIsMaximised(a.ctx), nil
+}
+
+// IsFullscreen returns whether window is fullscreen
+func (a *App) IsFullscreen() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, nil
+	}
+	return runtime.WindowIsFullscreen(a.ctx), nil
+}
+
+// MinimizeWindow minimizes the window
+func (a *App) MinimizeWindow() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx == nil {
+		return false, nil
+	}
+	runtime.WindowMinimise(a.ctx)
+	return true, nil
+}

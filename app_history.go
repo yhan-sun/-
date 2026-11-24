@@ -28,10 +28,16 @@ func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float6
 }
 
 func (a *App) GetPlaybackPosition(seriesID string) (*storage.WatchItem, error) {
+	if a.store == nil {
+		return nil, nil
+	}
 	return a.store.GetPlaybackPosition(seriesID), nil
 }
 
 func (a *App) GetWatchHistory() (interface{}, error) {
+	if a.store == nil {
+		return map[string]interface{}{"success": true, "results": []interface{}{}}, nil
+	}
 	return map[string]interface{}{"success": true, "results": a.store.GetWatchHistory()}, nil
 }
 

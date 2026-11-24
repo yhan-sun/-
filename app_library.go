@@ -87,6 +87,9 @@ func scanLibrary(root string, series []*storage.SeriesItem, tasks []*downloader.
 }
 
 func (a *App) libraryFiles(series []*storage.SeriesItem, sizes bool) (map[string]*libraryFiles, error) {
+	if a.store == nil {
+		return make(map[string]*libraryFiles), nil
+	}
 	var tasks []*downloader.DownloadTask
 	if queue := a.downloadQueue(); queue != nil {
 		tasks = queue.GetTasks()
@@ -95,6 +98,9 @@ func (a *App) libraryFiles(series []*storage.SeriesItem, sizes bool) (map[string
 }
 
 func (a *App) GetSeriesList(options map[string]interface{}) (interface{}, error) {
+	if a.store == nil {
+		return []*storage.SeriesItem{}, nil
+	}
 	series := a.store.GetSeriesList()
 	if onlyDownloaded, _ := options["downloadedOnly"].(bool); !onlyDownloaded {
 		return series, nil

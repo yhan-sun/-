@@ -50,8 +50,11 @@ cat << 'EOF' > "${CONTENTS}/Info.plist"
 </plist>
 EOF
 
-ICON_SOURCE="${ICON_SOURCE:-$DIR/build/icon.png}"
-if [ -f "$ICON_SOURCE" ]; then
+if [ -f "$DIR/build/appicon.icns" ]; then
+    echo "=== Copying prebuilt ICNS icon ==="
+    cp "$DIR/build/appicon.icns" "${RESOURCES}/appicon.icns"
+    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string appicon" "${CONTENTS}/Info.plist"
+elif [ -f "$ICON_SOURCE" ]; then
     echo "=== Generating ICNS icon ==="
     ICONSET="bin/app.iconset"
     rm -rf "${ICONSET}"
