@@ -351,121 +351,41 @@
 }
 
 /* ========================================================
-   Ultra-Premium Pro-Max Select & Segmented Controls
+   Ultra-Premium Transparent Custom Select Dropdown System
    ======================================================== */
 
-/* Hide redundant single-option source selectors */
-.source-control:has(select[aria-label="短剧来源"] option:only-child),
-.browse-header-right .source-control:has(select[aria-label*="来源"] option:only-child) {
-  display: none !important;
-}
-
-/* Universal Modern Select Styling */
-select,
-select.input-field,
-.browse-container .source-control select,
-.browse-completion-filter select,
-.select-field,
-.player-controls-menu select {
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  background-color: rgba(30, 41, 59, 0.75) !important;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat !important;
-  background-position: right 10px center !important;
-  background-size: 12px 12px !important;
-  padding: 5px 28px 5px 12px !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  border-radius: 8px !important;
-  color: #f1f5f9 !important;
-  font-size: 13px !important;
+.source-control {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
-  height: 32px !important;
-  min-height: 32px !important;
-  line-height: 20px !important;
-  backdrop-filter: blur(12px) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  cursor: pointer !important;
+  color: #94a3b8 !important;
 }
 
-select:hover,
-select.input-field:hover {
-  background-color: rgba(51, 65, 85, 0.85) !important;
-  border-color: rgba(76, 175, 80, 0.5) !important;
+.browse-completion-filter {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
 }
 
-select:focus,
-select:focus-visible,
-select.input-field:focus {
-  outline: none !important;
-  border-color: #4caf50 !important;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.22) !important;
-}
-
-select option {
-  background-color: #1e293b !important;
-  color: #f1f5f9 !important;
-  padding: 10px 14px !important;
-  font-size: 13px !important;
-}
-
-/* Segmented Pill Control for Catalog Route (官网 / App) */
-.segmented-route-control {
-  display: inline-flex;
-  align-items: center;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 2px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.segmented-route-control .seg-btn {
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  padding: 4px 11px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.segmented-route-control .seg-btn:hover:not(.active) {
-  color: #f1f5f9;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.segmented-route-control .seg-btn.active {
-  background: linear-gradient(135deg, #4caf50, #388e3c);
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.35);
-}
-
-/* Hide raw select when custom segmented control is attached */
-.source-control.segmented-attached select {
+/* Ensure native select is completely hidden when custom wrapper is present */
+select:has(+ .custom-select-wrapper),
+.custom-select-hidden,
+.source-control select,
+.browse-completion-filter select {
   display: none !important;
 }
-
-/* ========================================================
-   Custom Select Glassmorphism Popover & Trigger Component
-   ======================================================== */
 
 .custom-select-wrapper {
   position: relative !important;
   display: inline-flex !important;
   vertical-align: middle !important;
   user-select: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif !important;
 }
 
+/* Transparent Trigger Box (未展开状态：全透明极简微光毛玻璃) */
 .custom-select-trigger {
   display: inline-flex !important;
   align-items: center !important;
@@ -473,34 +393,43 @@ select option {
   gap: 10px !important;
   height: 32px !important;
   min-height: 32px !important;
-  padding: 0 12px !important;
-  background: rgba(30, 41, 59, 0.75) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  border-radius: 8px !important;
-  color: #f1f5f9 !important;
+  padding: 0 12px 0 14px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 9px !important;
+  color: #f8fafc !important;
   font-size: 13px !important;
   font-weight: 500 !important;
   cursor: pointer !important;
-  backdrop-filter: blur(12px) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   white-space: nowrap !important;
 }
 
 .custom-select-trigger:hover {
-  background: rgba(51, 65, 85, 0.85) !important;
-  border-color: rgba(76, 175, 80, 0.5) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  transform: translateY(-1px) !important;
 }
 
 .custom-select-wrapper.open .custom-select-trigger {
-  border-color: #4caf50 !important;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.22) !important;
-  background: rgba(51, 65, 85, 0.95) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(76, 175, 80, 0.65) !important;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2), 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.custom-select-label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .custom-select-arrow {
   color: #94a3b8 !important;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease !important;
   flex-shrink: 0 !important;
 }
 
@@ -509,7 +438,7 @@ select option {
   color: #4caf50 !important;
 }
 
-/* Expanded Dropdown Menu */
+/* Expanded Transparent Glass Menu (展开后的全透明亚克力浮层) */
 .custom-select-menu {
   position: absolute !important;
   top: calc(100% + 6px) !important;
@@ -519,21 +448,22 @@ select option {
   max-height: 280px !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  background: rgba(23, 32, 48, 0.96) !important;
-  backdrop-filter: blur(24px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 10px !important;
-  padding: 5px !important;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35) !important;
-  z-index: 99999 !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(28px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 12px !important;
+  padding: 6px !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45), 0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  z-index: 999999 !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 2px !important;
+  gap: 3px !important;
   transform-origin: top center !important;
   opacity: 0 !important;
-  transform: translateY(-6px) scale(0.97) !important;
+  transform: translateY(-8px) scale(0.96) !important;
   pointer-events: none !important;
-  transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .custom-select-wrapper.open .custom-select-menu {
@@ -542,45 +472,80 @@ select option {
   pointer-events: auto !important;
 }
 
+/* Options inside Menu */
 .custom-select-option {
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
   gap: 12px !important;
   padding: 8px 12px !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   font-size: 13px !important;
   font-weight: 500 !important;
-  color: #cbd5e1 !important;
+  color: #e2e8f0 !important;
+  background: transparent !important;
   cursor: pointer !important;
-  transition: all 0.12s ease !important;
+  transition: all 0.14s ease !important;
   white-space: nowrap !important;
 }
 
 .custom-select-option:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   color: #ffffff !important;
+  transform: translateX(2px) !important;
 }
 
 .custom-select-option.selected {
-  background: rgba(76, 175, 80, 0.18) !important;
+  background: rgba(76, 175, 80, 0.22) !important;
   color: #4caf50 !important;
   font-weight: 600 !important;
 }
 
 .cso-check {
-  font-size: 12px !important;
+  font-size: 13px !important;
   color: #4caf50 !important;
   font-weight: 700 !important;
   opacity: 0 !important;
   transform: scale(0.6) !important;
-  transition: all 0.12s ease !important;
+  transition: all 0.14s ease !important;
 }
 
 .custom-select-option.selected .cso-check {
   opacity: 1 !important;
   transform: scale(1) !important;
 }
+
+/* Smart Drop-Up Positioning when near bottom of viewport */
+.custom-select-wrapper.drop-up .custom-select-menu {
+  top: auto !important;
+  bottom: calc(100% + 6px) !important;
+  transform-origin: bottom center !important;
+  transform: translateY(8px) scale(0.96) !important;
+}
+
+.custom-select-wrapper.drop-up.open .custom-select-menu {
+  transform: translateY(0) scale(1) !important;
+}
+
+/* Sleek Translucent Menu Scrollbar */
+.custom-select-menu::-webkit-scrollbar {
+  width: 4px !important;
+}
+
+.custom-select-menu::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.custom-select-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-radius: 999px !important;
+}
+
+.custom-select-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+
 
 
 

@@ -698,6 +698,7 @@
     select.style.setProperty('padding', '0', 'important');
     select.style.setProperty('border', 'none', 'important');
     select.tabIndex = -1;
+    select.classList.add('custom-select-hidden');
 
     const wrapper = document.createElement('div');
     wrapper.className = 'custom-select-wrapper';
@@ -801,6 +802,11 @@
         }
       });
       buildOptions();
+      try {
+        const rect = trigger.getBoundingClientRect();
+        const fitsBelow = window.innerHeight - rect.bottom > 220;
+        wrapper.classList.toggle('drop-up', !fitsBelow);
+      } catch {}
       wrapper.classList.add('open');
       trigger.setAttribute('aria-expanded', 'true');
     }
@@ -852,74 +858,17 @@
     }
   }, true);
 
-  // Dynamic Dropdown & Route Enhancer: turns clunky select into sleek segmented pill & custom glassmorphism selects
+  // Dynamic Dropdown Enhancer: converts all selects into ultra-transparent glassmorphism custom dropdown components
   function enhanceDropdowns() {
     if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
 
-    // 1. Hide single-option source selectors
-    const sourceSelects = document.querySelectorAll('select[aria-label*="来源"]');
-    for (const sel of sourceSelects) {
-      if (sel.options && sel.options.length <= 1) {
-        const parent = sel.closest('.source-control') || sel.parentElement;
-        if (parent) parent.style.display = 'none';
-      }
-    }
-
-    // 2. Transform catalog route select into sleek segmented pill control
-    const routeSelects = document.querySelectorAll('select[aria-label*="目录线路"]');
-    for (const sel of routeSelects) {
-      const parent = sel.closest('.source-control') || sel.parentElement;
-      if (!parent || parent.querySelector('.segmented-route-control')) continue;
-
-      parent.classList.add('segmented-attached');
-      const seg = document.createElement('div');
-      seg.className = 'segmented-route-control';
-      seg.setAttribute('role', 'radiogroup');
-      seg.setAttribute('aria-label', '目录线路');
-
-      seg.innerHTML = `
-        <button type="button" class="seg-btn ${sel.value !== 'app' ? 'active' : ''}" data-val="web" title="官方完整片单与准确热榜">官网完整</button>
-        <button type="button" class="seg-btn ${sel.value === 'app' ? 'active' : ''}" data-val="app" title="快速链路片单">快速App</button>
-      `;
-
-      function syncActive() {
-        const btns = seg.querySelectorAll('.seg-btn');
-        for (const b of btns) {
-          b.classList.toggle('active', b.dataset.val === sel.value);
-        }
-      }
-
-      seg.addEventListener('click', e => {
-        const btn = e.target.closest('.seg-btn');
-        if (!btn || !btn.dataset.val) return;
-        const targetVal = btn.dataset.val;
-        if (sel.value === targetVal) return;
-
-        try {
-          const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement?.prototype || {}, 'value')?.set;
-          if (setter) {
-            setter.call(sel, targetVal);
-          } else {
-            sel.value = targetVal;
-          }
-        } catch {
-          sel.value = targetVal;
-        }
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
-        syncActive();
-      });
-
-      sel.addEventListener('change', syncActive);
-      parent.appendChild(seg);
-    }
-
-    // 3. For ALL other select elements, convert to custom glassmorphic select popovers
+    // Convert ALL select elements into the custom transparent dropdown component
     const allSelects = document.querySelectorAll('select');
     for (const sel of allSelects) {
-      if (sel.closest('.segmented-attached')) continue;
       makeCustomSelect(sel);
     }
   }
+
 
   try {
     enhanceDropdowns();
