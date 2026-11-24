@@ -282,4 +282,41 @@
       }
     }
   }, true);
+
+  // Native desktop player hotkeys: Space (play/pause), ArrowLeft/Right (seek), ArrowUp/Down (volume), F (fullscreen), M (mute)
+  window.addEventListener('keydown', event => {
+    if (event.target?.closest && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const video = document.querySelector('.main-content[data-page="player"] video, video');
+    if (!video) return;
+
+    if (event.code === 'Space') {
+      event.preventDefault();
+      if (video.paused) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    } else if (event.code === 'ArrowRight') {
+      event.preventDefault();
+      video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 5);
+    } else if (event.code === 'ArrowLeft') {
+      event.preventDefault();
+      video.currentTime = Math.max(0, video.currentTime - 5);
+    } else if (event.code === 'ArrowUp') {
+      event.preventDefault();
+      video.volume = Math.min(1, Math.round((video.volume + 0.05) * 100) / 100);
+      video.muted = false;
+    } else if (event.code === 'ArrowDown') {
+      event.preventDefault();
+      video.volume = Math.max(0, Math.round((video.volume - 0.05) * 100) / 100);
+    } else if (event.code === 'KeyF') {
+      event.preventDefault();
+      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
+        window.electronAPI.toggleFullscreen().catch(() => {});
+      }
+    } else if (event.code === 'KeyM') {
+      event.preventDefault();
+      video.muted = !video.muted;
+    }
+  }, true);
 })();

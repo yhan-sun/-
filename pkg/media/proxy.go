@@ -77,6 +77,79 @@ func (p *Proxy) StreamURL(seriesID, vid string) string {
 	return fmt.Sprintf("http://%s/stream/%s/%s", p.addr, seriesID, vid)
 }
 
+// Prewarm starts prefetching and decrypting an episode into in-memory cache in background
+func (p *Proxy) Prewarm(seriesID, vid string) {
+	if seriesID == "" || vid == "" || p.resolver == nil {
+		return
+	}
+	cacheKey := fmt.Sprintf("%s:%s", seriesID, vid)
+	if p.getCached(cacheKey) != nil {
+		return
+	}
+
+	go func() {
+		p.inflightMu.Lock()
+		if _, inFlight := p.inflight[cacheKey]; inFlight {
+			p.inflightMu.Unlock()
+			return
+		}
+		waitCh := make(chan struct{})
+		p.inflight[cacheKey] = waitCh
+		p.inflightMu.Unlock()
+
+		defer func() {
+			p.inflightMu.Lock()
+			delete(p.inflight, cacheKey)
+			close(waitCh)
+			p.inflightMu.Unlock()
+		}()
+
+		bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		mediaURL, contentKey, err := p.resolver(bgCtx, seriesID, vid)
+		if err != nil || mediaURL == "" {
+			return
+		}
+
+		req, err := http.NewRequestWithContext(bgCtx, "GET", mediaURL, nil)
+		if err != nil {
+			return
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("Referer", "https://hongguoduanju.com/")
+
+		client := &http.Client{Timeout: 40 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil && resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			return
+		}
+		defer resp.Body.Close()
+
+		rawBytes, err := io.ReadAll(resp.Body)
+		if err != nil || len(rawBytes) == 0 {
+			return
+		}
+
+		var buf []byte
+		if len(contentKey) > 0 {
+			decrypted, err := cenc.DecryptMp4Buffer(rawBytes, contentKey)
+			if err == nil && len(decrypted) > 0 {
+				buf = decrypted
+			} else {
+				buf = rawBytes
+			}
+		} else {
+			buf = rawBytes
+		}
+
+		p.setCached(cacheKey, buf)
+	}()
+}
+
 func (p *Proxy) LocalURL(filePath string) string {
 	return fmt.Sprintf("http://%s/local/?path=%s", p.addr, url.QueryEscape(filePath))
 }

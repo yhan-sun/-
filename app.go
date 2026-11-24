@@ -276,6 +276,20 @@ func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, er
 		return map[string]interface{}{"success": false, "error": "播放服务尚未就绪或缺少剧集信息"}, nil
 	}
 	streamURL := proxy.StreamURL(seriesID, vid)
+	proxy.Prewarm(seriesID, vid)
+
+	// Also prewarm next episode in background for instant transition
+	if vIdx, ok := payload["vidIndex"].(float64); ok && int(vIdx) > 0 {
+		nextIdx := int(vIdx) + 1
+		if detail := a.store.GetSeries(seriesID); detail != nil {
+			for _, ep := range detail.Episodes {
+				if ep.VidIndex == nextIdx && ep.Vid != "" {
+					proxy.Prewarm(seriesID, ep.Vid)
+					break
+				}
+			}
+		}
+	}
 
 	return map[string]interface{}{
 		"success":   true,
@@ -297,8 +311,19 @@ func (a *App) PlaySeries(payload map[string]interface{}) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := a.ensureSeries(seriesID); err != nil {
+	detail, err := a.ensureSeries(seriesID)
+	if err != nil {
 		return map[string]interface{}{"success": false, "error": err.Error()}, nil
+	}
+
+	// Prewarm first episode stream
+	if detail != nil && len(detail.Episodes) > 0 {
+		a.mu.Lock()
+		proxy := a.proxy
+		a.mu.Unlock()
+		if proxy != nil {
+			proxy.Prewarm(seriesID, detail.Episodes[0].Vid)
+		}
 	}
 
 	// One native event opens the player for every caller.
@@ -321,6 +346,16 @@ func (a *App) ReleaseOnlinePlay(payload map[string]interface{}) (interface{}, er
 
 // PromoteOnlinePlay handles prefetching promotion
 func (a *App) PromoteOnlinePlay(payload map[string]interface{}) (interface{}, error) {
+	seriesID, _ := payload["seriesId"].(string)
+	vid, _ := payload["vid"].(string)
+	if seriesID != "" && vid != "" {
+		a.mu.Lock()
+		proxy := a.proxy
+		a.mu.Unlock()
+		if proxy != nil {
+			proxy.Prewarm(seriesID, vid)
+		}
+	}
 	return map[string]interface{}{
 		"success": true,
 	}, nil
