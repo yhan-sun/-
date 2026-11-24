@@ -350,3 +350,109 @@
   color: #cbd5e1;
 }
 
+/* ========================================================
+   Ultra-Premium Pro-Max Select & Segmented Controls
+   ======================================================== */
+
+/* Hide redundant single-option source selectors */
+.source-control:has(select[aria-label="短剧来源"] option:only-child),
+.browse-header-right .source-control:has(select[aria-label*="来源"] option:only-child) {
+  display: none !important;
+}
+
+/* Universal Modern Select Styling */
+select,
+select.input-field,
+.browse-container .source-control select,
+.browse-completion-filter select,
+.select-field,
+.player-controls-menu select {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-color: rgba(30, 41, 59, 0.75) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
+  background-size: 12px 12px !important;
+  padding: 5px 28px 5px 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 8px !important;
+  color: #f1f5f9 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  line-height: 20px !important;
+  backdrop-filter: blur(12px) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+}
+
+select:hover,
+select.input-field:hover {
+  background-color: rgba(51, 65, 85, 0.85) !important;
+  border-color: rgba(76, 175, 80, 0.5) !important;
+}
+
+select:focus,
+select:focus-visible,
+select.input-field:focus {
+  outline: none !important;
+  border-color: #4caf50 !important;
+  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.22) !important;
+}
+
+select option {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+}
+
+/* Segmented Pill Control for Catalog Route (官网 / App) */
+.segmented-route-control {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.segmented-route-control .seg-btn {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.segmented-route-control .seg-btn:hover:not(.active) {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.segmented-route-control .seg-btn.active {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.35);
+}
+
+/* Hide raw select when custom segmented control is attached */
+.source-control.segmented-attached select {
+  display: none !important;
+}
+
+

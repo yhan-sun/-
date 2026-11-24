@@ -657,15 +657,83 @@
     const pageObserver = new MutationObserver(() => {
       clearTimeout(decorTimer);
       decorTimer = setTimeout(() => {
+        enhanceDropdowns();
         if (document.querySelector('.browse-container')) {
           refreshWatchDecorations();
         }
-      }, 150);
+      }, 100);
     });
     try {
       pageObserver.observe(document.body, { childList: true, subtree: true });
     } catch {}
   }
+
+  // Dynamic Dropdown & Route Enhancer: turns clunky select into sleek segmented pill
+  function enhanceDropdowns() {
+    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+
+    // 1. Hide single-option source selectors
+    const sourceSelects = document.querySelectorAll('select[aria-label*="来源"]');
+    for (const sel of sourceSelects) {
+      if (sel.options && sel.options.length <= 1) {
+        const parent = sel.closest('.source-control') || sel.parentElement;
+        if (parent) parent.style.display = 'none';
+      }
+    }
+
+    // 2. Transform catalog route select into sleek segmented pill control
+    const routeSelects = document.querySelectorAll('select[aria-label*="目录线路"]');
+    for (const sel of routeSelects) {
+      const parent = sel.closest('.source-control') || sel.parentElement;
+      if (!parent || parent.querySelector('.segmented-route-control')) continue;
+
+      parent.classList.add('segmented-attached');
+      const seg = document.createElement('div');
+      seg.className = 'segmented-route-control';
+      seg.setAttribute('role', 'radiogroup');
+      seg.setAttribute('aria-label', '目录线路');
+
+      seg.innerHTML = `
+        <button type="button" class="seg-btn ${sel.value !== 'app' ? 'active' : ''}" data-val="web" title="官方完整片单与准确热榜">官网完整</button>
+        <button type="button" class="seg-btn ${sel.value === 'app' ? 'active' : ''}" data-val="app" title="快速链路片单">快速App</button>
+      `;
+
+      function syncActive() {
+        const btns = seg.querySelectorAll('.seg-btn');
+        for (const b of btns) {
+          b.classList.toggle('active', b.dataset.val === sel.value);
+        }
+      }
+
+      seg.addEventListener('click', e => {
+        const btn = e.target.closest('.seg-btn');
+        if (!btn || !btn.dataset.val) return;
+        const targetVal = btn.dataset.val;
+        if (sel.value === targetVal) return;
+
+        try {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement?.prototype || {}, 'value')?.set;
+          if (setter) {
+            setter.call(sel, targetVal);
+          } else {
+            sel.value = targetVal;
+          }
+        } catch {
+          sel.value = targetVal;
+        }
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        syncActive();
+      });
+
+      sel.addEventListener('change', syncActive);
+      parent.appendChild(seg);
+    }
+  }
+
+  try {
+    enhanceDropdowns();
+  } catch {}
+
 
   // Auto-dismiss modal when clicking backdrop mask
   window.addEventListener('click', event => {
