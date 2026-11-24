@@ -572,125 +572,13 @@
   }
 
   function updateContinueWatchingShelf() {
-    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
-    const container = document.querySelector('.browse-container');
-    if (!container) return;
-
-    let shelf = document.getElementById('continue-watching-shelf');
-    if (!cachedWatchHistory || cachedWatchHistory.length === 0) {
-      if (shelf) shelf.remove();
-      return;
-    }
-
-    const recent = cachedWatchHistory.find(it => !it.completed) || cachedWatchHistory[0];
-    if (!recent || !recent.series_id) {
-      if (shelf) shelf.remove();
-      return;
-    }
-
-    try {
-      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('dismiss_cws_' + recent.series_id) === '1') {
-        if (shelf) shelf.remove();
-        return;
-      }
-    } catch {}
-
-    if (!shelf) {
-      shelf = document.createElement('div');
-      shelf.id = 'continue-watching-shelf';
-      shelf.className = 'continue-watching-shelf';
-      const header = container.querySelector('.browse-header');
-      if (header && header.nextSibling) {
-        container.insertBefore(shelf, header.nextSibling);
-      } else {
-        container.prepend(shelf);
-      }
-    }
-
-    const title = recent.series_title || '短剧';
-    const epText = '看到第 ' + (recent.vid_index || 1) + ' 集' + (recent.total > 0 ? ' / 全 ' + recent.total + ' 集' : '');
-    const cover = recent.cover || '';
-
-    shelf.innerHTML = `
-      <div class="cws-left">
-        ${cover ? `<img class="cws-cover" src="${cover}" alt="${title}" onerror="this.style.display='none'; const fb = this.parentElement?.querySelector('.cws-cover-fallback'); if (fb) fb.removeAttribute('hidden');" />` : ''}
-        <div class="cws-cover cws-cover-fallback" ${cover ? 'hidden' : ''}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-          </svg>
-        </div>
-        <div class="cws-info">
-          <div class="cws-label"><span>▶</span> 继续观看</div>
-          <div class="cws-title">${title}</div>
-          <div class="cws-progress-text">${epText}</div>
-        </div>
-      </div>
-      <div class="cws-right">
-        <button class="cws-btn-play" type="button">▶ 继续播放</button>
-        <button class="cws-btn-close" type="button" title="关闭">✕</button>
-      </div>
-    `;
-
-    const playBtn = shelf.querySelector('.cws-btn-play');
-    if (playBtn) {
-      playBtn.onclick = () => {
-        emit('navigate', { page: 'player', payload: { seriesId: recent.series_id, resume: true, autoplay: true } });
-      };
-    }
-    const closeBtn = shelf.querySelector('.cws-btn-close');
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        try {
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem('dismiss_cws_' + recent.series_id, '1');
-          }
-        } catch {}
-        shelf.remove();
-      };
-    }
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    const shelf = document.getElementById('continue-watching-shelf');
+    if (shelf) shelf.remove();
   }
 
   function updateBrowseCardsBadges() {
-    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function' || !cachedWatchHistory.length) return;
-    const titleMap = new Map();
-    for (const it of cachedWatchHistory) {
-      if (it.series_title) titleMap.set(it.series_title.trim(), it);
-      if (it.series_id) titleMap.set(String(it.series_id).trim(), it);
-    }
-
-    const cards = document.querySelectorAll('.browse-card');
-    for (const card of cards) {
-      const titleEl = card.querySelector('.browse-card-title') || card;
-      const titleText = (titleEl.textContent || card.title || '').replace(/^播放：/, '').trim();
-      const matched = titleMap.get(titleText);
-      if (!matched) continue;
-
-      const cover = card.querySelector('.browse-cover');
-      if (!cover) continue;
-
-      let badge = cover.querySelector('.browse-watch-badge');
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'browse-watch-badge' + (matched.completed ? ' completed' : '');
-        cover.appendChild(badge);
-      }
-      badge.textContent = matched.completed ? '已看完' : ('已看第 ' + matched.vid_index + ' 集');
-
-      let bar = cover.querySelector('.browse-watch-bar');
-      if (!bar) {
-        bar = document.createElement('div');
-        bar.className = 'browse-watch-bar';
-        const fill = document.createElement('div');
-        fill.className = 'browse-watch-bar-fill';
-        bar.appendChild(fill);
-        cover.appendChild(bar);
-      }
-      const fill = bar.querySelector('.browse-watch-bar-fill');
-      if (fill) {
-        const pct = matched.completed ? 100 : (matched.total > 0 ? Math.min(100, Math.round(matched.vid_index / matched.total * 100)) : 10);
-        fill.style.width = pct + '%';
-      }
-    }
+    // Badges and watch progress are rendered natively by React Browse.jsx
   }
 
   // Hook into watch history event
