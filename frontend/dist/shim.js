@@ -165,7 +165,7 @@
   // These callers consume the raw value and handle a rejected Promise themselves.
   const api = {
     platform: 'darwin',
-    nativePictureInPicture: false,
+    nativePictureInPicture: true,
     getAppInfo: async () => ({
       version: '7.9.0', brand: '牛油果短剧', appName: '牛油果短剧', platform: 'darwin', preview: false
     }),
@@ -210,7 +210,22 @@
     startCasting: async () => ({ success: false, error: '当前桌面版暂不支持投屏功能' }),
     controlCasting: async () => ({ success: true }),
     testProxy: async () => ({ success: false, error: '当前桌面版尚未接入网络代理' }),
-    enterNativePictureInPicture: async () => false,
+    enterNativePictureInPicture: async () => {
+      const video = document.querySelector('.main-content[data-page="player"] video, video');
+      if (!video) return false;
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+          return false;
+        } else if (typeof video.requestPictureInPicture === 'function') {
+          await video.requestPictureInPicture();
+          return true;
+        }
+      } catch (err) {
+        console.warn('[PiP] requestPictureInPicture error:', err);
+      }
+      return false;
+    },
     openEpisodeExternal: async url => invoke('openExternalUrl', [url]),
     downloadSeriesToNas: async (seriesId, targetDir, options = {}) => invoke('downloadSeriesToNas', [seriesId, targetDir, options]),
     transcodeForPlayback: async payload => invoke('transcodeForPlayback', [payload]),
@@ -278,19 +293,66 @@
     }
   }, true);
 
-  // Double-click window toolbar to toggle maximize
+  // Double-click window toolbar or video stage to toggle maximize / fullscreen
   window.addEventListener('dblclick', event => {
     if (event.button !== 0 || !event.target?.closest) return;
-    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"]')) return;
+    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"], .player-controls, .player-control')) return;
     if (event.target.closest('.window-toolbar')) {
       if (typeof window.electronAPI?.toggleMaximize === 'function') {
         window.electronAPI.toggleMaximize().catch(() => {});
       }
+    } else if (event.target.closest('.player-stage, video, .player-viewing-layout')) {
+      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
+        window.electronAPI.toggleFullscreen().catch(() => {});
+      }
     }
   }, true);
 
-  // Native desktop player hotkeys: Space (play/pause), ArrowLeft/Right (seek), ArrowUp/Down (volume), F (fullscreen), M (mute)
+  // Player on-screen quick toast HUD
+  let hudToastEl = null;
+  let hudTimer = null;
+  function showPlayerHUD(text) {
+    if (typeof document === 'undefined' || !document.body) return;
+    if (!hudToastEl) {
+      hudToastEl = document.createElement('div');
+      hudToastEl.id = 'player-hud-toast';
+      hudToastEl.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;transition:opacity 0.18s ease;opacity:0;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.12);box-shadow:0 8px 24px rgba(0,0,0,0.3);';
+      document.body.appendChild(hudToastEl);
+    }
+    hudToastEl.textContent = text;
+    hudToastEl.style.opacity = '1';
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => {
+      if (hudToastEl) hudToastEl.style.opacity = '0';
+    }, 1200);
+  }
+
+  // Global search & player shortcuts:
+  // Space (play/pause), ArrowLeft/Right (seek), ArrowUp/Down (volume), F (fullscreen), M (mute), > / < (speed)
+  // Cmd+K / Cmd+F (search), Escape (blur / close modal)
   window.addEventListener('keydown', event => {
+    // Global Cmd+K / Cmd+F for search
+    if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'f') && !event.shiftKey) {
+      const searchInput = document.querySelector('input[type="search"], .search-input, input[placeholder*="搜索"]');
+      if (searchInput) {
+        event.preventDefault();
+        searchInput.focus();
+        searchInput.select?.();
+        return;
+      }
+    } else if (event.key === 'Escape') {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        activeEl.blur();
+        return;
+      }
+      const closeBtn = document.querySelector('.modal-mask .modal-close, .modal-mask button[aria-label="关闭"]');
+      if (closeBtn) {
+        closeBtn.click();
+        return;
+      }
+    }
+
     if (event.target?.closest && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
     const video = document.querySelector('.main-content[data-page="player"] video, video');
     if (!video) return;
@@ -299,22 +361,28 @@
       event.preventDefault();
       if (video.paused) {
         video.play().catch(() => {});
+        showPlayerHUD('▶ 播放');
       } else {
         video.pause();
+        showPlayerHUD('⏸ 暂停');
       }
     } else if (event.code === 'ArrowRight') {
       event.preventDefault();
       video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 5);
+      showPlayerHUD('快进 +5s');
     } else if (event.code === 'ArrowLeft') {
       event.preventDefault();
       video.currentTime = Math.max(0, video.currentTime - 5);
+      showPlayerHUD('快退 -5s');
     } else if (event.code === 'ArrowUp') {
       event.preventDefault();
       video.volume = Math.min(1, Math.round((video.volume + 0.05) * 100) / 100);
       video.muted = false;
+      showPlayerHUD('音量: ' + Math.round(video.volume * 100) + '%');
     } else if (event.code === 'ArrowDown') {
       event.preventDefault();
       video.volume = Math.max(0, Math.round((video.volume - 0.05) * 100) / 100);
+      showPlayerHUD('音量: ' + Math.round(video.volume * 100) + '%');
     } else if (event.code === 'KeyF') {
       event.preventDefault();
       if (typeof window.electronAPI?.toggleFullscreen === 'function') {
@@ -323,6 +391,21 @@
     } else if (event.code === 'KeyM') {
       event.preventDefault();
       video.muted = !video.muted;
+      showPlayerHUD(video.muted ? '已静音' : '已取消静音');
+    } else if (event.key === '>' || (event.shiftKey && event.key === '.')) {
+      event.preventDefault();
+      const nextRate = Math.min(3.0, Math.round((video.playbackRate + 0.25) * 100) / 100);
+      video.playbackRate = nextRate;
+      showPlayerHUD('倍速: ' + nextRate + 'x');
+    } else if (event.key === '<' || (event.shiftKey && event.key === ',')) {
+      event.preventDefault();
+      const prevRate = Math.max(0.5, Math.round((video.playbackRate - 0.25) * 100) / 100);
+      video.playbackRate = prevRate;
+      showPlayerHUD('倍速: ' + prevRate + 'x');
+    } else if (event.code === 'Digit0' || event.code === 'Numpad0') {
+      event.preventDefault();
+      video.playbackRate = 1.0;
+      showPlayerHUD('倍速: 1.0x (原速)');
     }
   }, true);
 })();

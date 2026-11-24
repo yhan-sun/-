@@ -193,3 +193,11 @@ test('extended bindings for compatibility, NAS export and media source managemen
 
   assert.equal(calls.length, 3);
 });
+
+test('nativePictureInPicture is supported and callable', async () => {
+  const { api } = loadBridge({});
+  assert.equal(api.nativePictureInPicture, true);
+  assert.equal(typeof api.enterNativePictureInPicture, 'function');
+  const res = await api.enterNativePictureInPicture();
+  assert.equal(typeof res, 'boolean');
+});
