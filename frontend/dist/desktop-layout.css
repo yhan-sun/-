@@ -23,11 +23,20 @@
   overflow: clip;
 }
 
-.layout-portrait .player-stage.player-window-fill:not(:fullscreen) {
-  position: absolute;
-  inset: 0;
-  width: auto;
-  height: auto;
+.layout-portrait .player-container:not(.standalone-player-mode) .player-stage.player-window-fill:not(:fullscreen) {
+  position: fixed !important;
+  inset: 48px 0 0 !important;
+  width: 100vw !important;
+  height: calc(100vh - 48px) !important;
+  z-index: 99 !important;
+}
+
+.main-content[data-page="player"]:has(.standalone-player-mode) {
+  overflow: hidden !important;
+}
+
+body:has(.standalone-player-mode) .scroll-to-top-btn {
+  display: none !important;
 }
 
 /* Expand the download actions in place when the toolbar needs multiple rows. */
@@ -1430,7 +1439,7 @@ input[type="search"]:focus,
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  z-index: 1200 !important;
+  z-index: 2000 !important;
   animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
@@ -1515,8 +1524,7 @@ input[type="search"]:focus,
 }
 
 .player-controls-seek:hover {
-  height: 7px !important;
-  background: rgba(255, 255, 255, 0.38) !important;
+  background: rgba(255, 255, 255, 0.4) !important;
 }
 
 .player-controls-seek::-webkit-slider-thumb {

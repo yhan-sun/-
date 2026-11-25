@@ -219,6 +219,10 @@
         if (document.pictureInPictureElement) {
           await document.exitPictureInPicture();
           return false;
+        } else if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
+          const next = video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+          video.webkitSetPresentationMode(next);
+          return next === 'picture-in-picture';
         } else if (typeof video.requestPictureInPicture === 'function') {
           await video.requestPictureInPicture();
           return true;
@@ -297,17 +301,13 @@
     }
   }, true);
 
-  // Double-click window toolbar or video stage to toggle maximize / fullscreen
+  // Double-click window toolbar to toggle maximize (video stage dblclick is handled cleanly by Player.jsx)
   window.addEventListener('dblclick', event => {
     if (event.button !== 0 || !event.target?.closest) return;
     if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"], .player-controls, .player-control')) return;
     if (event.target.closest('.window-toolbar')) {
       if (typeof window.electronAPI?.toggleMaximize === 'function') {
         window.electronAPI.toggleMaximize().catch(() => {});
-      }
-    } else if (event.target.closest('.player-stage, video, .player-viewing-layout')) {
-      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
-        window.electronAPI.toggleFullscreen().catch(() => {});
       }
     }
   }, true);
@@ -356,126 +356,7 @@
         return;
       }
     }
-
-    if (event.target?.closest && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    const video = document.querySelector('.main-content[data-page="player"] video, video');
-    if (!video) return;
-
-    if (event.code === 'Space') {
-      event.preventDefault();
-      if (video.paused) {
-        video.play().catch(() => {});
-        showPlayerHUD('▶ 播放');
-      } else {
-        video.pause();
-        showPlayerHUD('⏸ 暂停');
-      }
-    } else if (event.code === 'ArrowRight') {
-      event.preventDefault();
-      const step = event.shiftKey ? 10 : 5;
-      video.currentTime = Math.min(video.duration || Infinity, video.currentTime + step);
-      showPlayerHUD(`快进 +${step}s`);
-    } else if (event.code === 'ArrowLeft') {
-      event.preventDefault();
-      const step = event.shiftKey ? 10 : 5;
-      video.currentTime = Math.max(0, video.currentTime - step);
-      showPlayerHUD(`快退 -${step}s`);
-    } else if (event.code === 'ArrowUp') {
-      event.preventDefault();
-      video.volume = Math.min(1, Math.round((video.volume + 0.05) * 100) / 100);
-      video.muted = false;
-      showPlayerHUD('音量: ' + Math.round(video.volume * 100) + '%');
-    } else if (event.code === 'ArrowDown') {
-      event.preventDefault();
-      video.volume = Math.max(0, Math.round((video.volume - 0.05) * 100) / 100);
-      showPlayerHUD('音量: ' + Math.round(video.volume * 100) + '%');
-    } else if (event.key === ']' || (!event.metaKey && !event.ctrlKey && event.code === 'KeyN')) {
-      event.preventDefault();
-      const nextBtn = document.querySelector('button[aria-label*="下一集"], button[title*="下一集"]');
-      if (nextBtn && !nextBtn.disabled) {
-        nextBtn.click();
-        showPlayerHUD('⏭ 下一集');
-      }
-    } else if (event.key === '[' || (!event.metaKey && !event.ctrlKey && event.code === 'KeyP')) {
-      event.preventDefault();
-      const prevBtn = document.querySelector('button[aria-label*="上一集"], button[title*="上一集"]');
-      if (prevBtn && !prevBtn.disabled) {
-        prevBtn.click();
-        showPlayerHUD('⏮ 上一集');
-      }
-    } else if (event.code === 'KeyF') {
-      event.preventDefault();
-      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
-        window.electronAPI.toggleFullscreen().catch(() => {});
-      }
-    } else if (event.code === 'KeyM') {
-      event.preventDefault();
-      video.muted = !video.muted;
-      showPlayerHUD(video.muted ? '已静音' : '已取消静音');
-    } else if (event.key === '>' || (event.shiftKey && event.key === '.')) {
-      event.preventDefault();
-      const nextRate = Math.min(3.0, Math.round((video.playbackRate + 0.25) * 100) / 100);
-      video.playbackRate = nextRate;
-      savePlaybackRate(nextRate);
-      showPlayerHUD('倍速: ' + nextRate + 'x');
-    } else if (event.key === '<' || (event.shiftKey && event.key === ',')) {
-      event.preventDefault();
-      const prevRate = Math.max(0.5, Math.round((video.playbackRate - 0.25) * 100) / 100);
-      video.playbackRate = prevRate;
-      savePlaybackRate(prevRate);
-      showPlayerHUD('倍速: ' + prevRate + 'x');
-    } else if (event.code === 'Digit0' || event.code === 'Numpad0') {
-      event.preventDefault();
-      video.playbackRate = 1.0;
-      savePlaybackRate(1.0);
-      showPlayerHUD('倍速: 1.0x (原速)');
-    }
   }, true);
-
-  // Video stage click/double-click controls (single-click = play/pause, double-click = fullscreen)
-  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
-    let videoClickTimer = null;
-    document.addEventListener('click', event => {
-      const target = event.target;
-      if (!target || typeof target.closest !== 'function') return;
-      if (target.closest('.player-controls-bar, .player-controls-popover, .player-controls-menu, button, input, select, textarea, a')) return;
-      const stage = target.closest('.player-stage');
-      if (!stage) return;
-      const video = stage.querySelector('video');
-      if (!video) return;
-
-      if (videoClickTimer) {
-        clearTimeout(videoClickTimer);
-        videoClickTimer = null;
-        return;
-      }
-      videoClickTimer = setTimeout(() => {
-        videoClickTimer = null;
-        if (video.paused) {
-          video.play().catch(() => {});
-          showPlayerHUD('▶ 播放');
-        } else {
-          video.pause();
-          showPlayerHUD('⏸ 暂停');
-        }
-      }, 220);
-    }, true);
-
-    document.addEventListener('dblclick', event => {
-      const target = event.target;
-      if (!target || typeof target.closest !== 'function') return;
-      if (target.closest('.player-controls-bar, .player-controls-popover, .player-controls-menu, button, input, select, textarea, a')) return;
-      const stage = target.closest('.player-stage');
-      if (!stage) return;
-      if (videoClickTimer) {
-        clearTimeout(videoClickTimer);
-        videoClickTimer = null;
-      }
-      if (typeof window.electronAPI?.toggleFullscreen === 'function') {
-        window.electronAPI.toggleFullscreen().catch(() => {});
-      }
-    }, true);
-  }
 
   // Persistent playback rate & volume
   function getSavedPlaybackRate() {
