@@ -19,6 +19,7 @@ type WatchItem struct {
 	CurrentTime float64 `json:"currentTime"`
 	Duration    float64 `json:"duration"`
 	Ended       bool    `json:"ended,omitempty"`
+	Partial     bool    `json:"partial,omitempty"`
 	UpdatedAt   int64   `json:"updated_at"`
 }
 
@@ -47,8 +48,17 @@ func (s *Store) SavePlaybackPosition(position WatchItem) error {
 		if position.VidIndex == previous.VidIndex {
 			position.Vid = cmp.Or(position.Vid, previous.Vid)
 			position.EpisodeName = cmp.Or(position.EpisodeName, previous.EpisodeName)
+			if position.Partial && !previous.Partial && previous.Duration > 10.25 {
+				return nil
+			}
 			position.Duration = cmp.Or(position.Duration, previous.Duration)
 		}
+	}
+	if position.Partial {
+		position.Ended = false
+		position.Duration = 0
+		// A short excerpt has no reliable resume offset in the full episode.
+		position.CurrentTime = 0
 	}
 	position.UpdatedAt = time.Now().UnixMilli()
 	s.data.History[position.SeriesID] = &position
@@ -91,7 +101,7 @@ func (s *Store) GetWatchHistory() []WatchHistoryEntry {
 		}
 		entry.SeriesID = cmp.Or(entry.SeriesID, id)
 		entry.SeriesTitle = cmp.Or(entry.SeriesTitle, entry.SeriesID)
-		entry.Completed = entry.Total > 0 && entry.VidIndex == entry.Total &&
+		entry.Completed = !entry.Partial && entry.Total > 0 && entry.VidIndex == entry.Total &&
 			(entry.Ended || (entry.Duration > 0 && entry.CurrentTime >= entry.Duration))
 		list = append(list, entry)
 	}

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"hongguo/pkg/downloader"
+	"hongguo/pkg/hgapi"
 	"hongguo/pkg/storage"
 )
 
@@ -15,7 +16,8 @@ type libraryFiles struct {
 	SeriesID string `json:"series_id"`
 	Files    int    `json:"files"`
 	Bytes    int64  `json:"bytes"`
-	videos   map[string]bool
+	videos   map[string]string
+	onDisk   map[string]os.FileInfo
 }
 
 // Read each known series directory once. Only exact release filenames belong to
@@ -50,6 +52,13 @@ func scanLibrary(root string, series []*storage.SeriesItem, tasks []*downloader.
 
 	bySeries := make(map[string]*libraryFiles)
 	for dir, expected := range directories {
+		dirInfo, err := os.Lstat(dir)
+		if os.IsNotExist(err) || (err == nil && !dirInfo.IsDir()) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
 		entries, err := os.ReadDir(dir)
 		if os.IsNotExist(err) {
 			continue
@@ -62,25 +71,31 @@ func scanLibrary(root string, series []*storage.SeriesItem, tasks []*downloader.
 			if item.seriesID == "" || !entry.Type().IsRegular() {
 				continue
 			}
-			var bytes int64
+			var info os.FileInfo
 			if sizes {
-				info, err := entry.Info()
+				info, err = entry.Info()
 				if os.IsNotExist(err) {
 					continue
 				}
 				if err != nil {
 					return nil, err
 				}
-				bytes = info.Size()
 			}
 			files := bySeries[item.seriesID]
 			if files == nil {
-				files = &libraryFiles{SeriesID: item.seriesID, videos: make(map[string]bool)}
+				files = &libraryFiles{SeriesID: item.seriesID, videos: make(map[string]string)}
 				bySeries[item.seriesID] = files
 			}
 			files.Files++
-			files.Bytes += bytes
-			files.videos[item.vid] = true
+			path := filepath.Join(dir, entry.Name())
+			files.videos[item.vid] = path
+			if info != nil {
+				if files.onDisk == nil {
+					files.onDisk = make(map[string]os.FileInfo)
+				}
+				files.onDisk[path] = info
+				files.Bytes += info.Size()
+			}
 		}
 	}
 	return bySeries, nil
@@ -95,6 +110,33 @@ func (a *App) libraryFiles(series []*storage.SeriesItem, sizes bool) (map[string
 		tasks = queue.GetTasks()
 	}
 	return scanLibrary(a.store.GetSettings().Root, series, tasks, sizes)
+}
+
+// A verified download can be played independently of the web catalog.
+func (a *App) seriesWithLocalFiles(detail *hgapi.SeriesDetail) *hgapi.SeriesDetail {
+	a.mu.Lock()
+	proxy := a.proxy
+	a.mu.Unlock()
+	if proxy == nil || a.store == nil {
+		return detail
+	}
+	item := a.store.GetSeries(detail.SeriesID)
+	if item == nil {
+		return detail
+	}
+	found, err := a.libraryFiles([]*storage.SeriesItem{item}, false)
+	if err != nil || found[item.SeriesID] == nil {
+		return detail
+	}
+	view := *detail
+	view.Episodes = slices.Clone(detail.Episodes)
+	for i := range view.Episodes {
+		ep := &view.Episodes[i]
+		if path := found[item.SeriesID].videos[ep.Vid]; path != "" {
+			ep.FileURL, ep.Status, ep.Locked = proxy.LocalURL(path), "completed", false
+		}
+	}
+	return &view
 }
 
 func (a *App) GetSeriesList(options map[string]interface{}) (interface{}, error) {
@@ -130,7 +172,7 @@ func (a *App) GetSeriesProgress() (interface{}, error) {
 }
 
 func (a *App) GetStorageUsage() (interface{}, error) {
-	found, err := a.libraryFiles(a.store.GetSeriesList(), true)
+	found, err := a.downloadInventory()
 	if err != nil {
 		return nil, err
 	}
@@ -146,4 +188,14 @@ func (a *App) GetStorageUsage() (interface{}, error) {
 	return map[string]interface{}{
 		"success": true, "totalFiles": totalFiles, "totalBytes": totalBytes, "series": rows,
 	}, nil
+}
+
+func (a *App) downloadInventory() (map[string]*libraryFiles, error) {
+	if a.store != nil {
+		return a.libraryFiles(a.store.RegisteredSeries(), true)
+	}
+	if queue := a.downloadQueue(); queue != nil {
+		return scanLibrary("", nil, queue.GetTasks(), true)
+	}
+	return nil, nil
 }

@@ -2,9 +2,69 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+type playerWindowFrame struct {
+	x, y, width, height   int
+	fullscreen, maximised bool
+}
+
+// SetPlayerMiniWindow keeps the playing WebView alive in the same native window.
+func (a *App) SetPlayerMiniWindow(enabled bool, aspect float64) (bool, error) {
+	ctx, err := a.desktopContext()
+	if err != nil {
+		return false, err
+	}
+	a.miniWindowMu.Lock()
+	defer a.miniWindowMu.Unlock()
+	if enabled == (a.miniWindow != nil) {
+		return enabled, nil
+	}
+	if !enabled {
+		frame := a.miniWindow
+		pinned, _ := a.GetAlwaysOnTop()
+		runtime.WindowSetAlwaysOnTop(ctx, pinned)
+		runtime.WindowSetSize(ctx, frame.width, frame.height)
+		runtime.WindowSetPosition(ctx, frame.x, frame.y)
+		if frame.maximised {
+			runtime.WindowMaximise(ctx)
+		}
+		if frame.fullscreen {
+			runtime.WindowFullscreen(ctx)
+		}
+		a.miniWindow = nil
+		return false, nil
+	}
+	frame := &playerWindowFrame{fullscreen: runtime.WindowIsFullscreen(ctx)}
+	if frame.fullscreen {
+		runtime.WindowUnfullscreen(ctx)
+		deadline := time.Now().Add(2 * time.Second)
+		for runtime.WindowIsFullscreen(ctx) && time.Now().Before(deadline) {
+			time.Sleep(30 * time.Millisecond)
+		}
+		if runtime.WindowIsFullscreen(ctx) {
+			return false, fmt.Errorf("请先退出全屏，再打开小窗")
+		}
+	}
+	frame.maximised = runtime.WindowIsMaximised(ctx)
+	if frame.maximised {
+		runtime.WindowUnmaximise(ctx)
+	}
+	frame.width, frame.height = runtime.WindowGetSize(ctx)
+	frame.x, frame.y = runtime.WindowGetPosition(ctx)
+	if aspect <= 0 || math.IsNaN(aspect) || math.IsInf(aspect, 0) {
+		aspect = 16.0 / 9
+	}
+	height := int(math.Round(math.Max(240, math.Min(540, 420/aspect))))
+	runtime.WindowSetSize(ctx, 420, height)
+	runtime.WindowSetAlwaysOnTop(ctx, true)
+	a.miniWindow = frame
+	return true, nil
+}
 
 // SetAlwaysOnTop sets window always on top
 func (a *App) SetAlwaysOnTop(onTop bool) (bool, error) {

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -281,29 +282,19 @@ func (a *App) DownloadFollowingEpisodes(seriesID string, fromVidIndex int, quali
 	})
 }
 
-// DeleteSeriesFiles deletes all downloaded files for a series
+// DeleteSeriesFiles leaves the catalog record and watch position intact.
 func (a *App) DeleteSeriesFiles(seriesID string) (interface{}, error) {
-	queue := a.downloadQueue()
-	if queue != nil {
-		tasks := queue.GetTasks()
-		var toDelete []string
-		for _, t := range tasks {
-			if t.SeriesID == seriesID {
-				toDelete = append(toDelete, t.ID)
-			}
-		}
-		if len(toDelete) > 0 {
-			_, _ = a.DeleteTasksWithFiles(toDelete, true)
-		}
+	seriesID = strings.TrimSpace(seriesID)
+	if seriesID == "" {
+		return nil, errors.New("缺少剧集 ID")
 	}
-	if a.store != nil {
-		_ = a.store.ForgetSeries(seriesID)
-	}
-	return map[string]interface{}{"success": true}, nil
+	return a.deleteRecordedDownloads(seriesID)
 }
 
-// DeleteAllDownloaded deletes all downloaded tasks and files
 func (a *App) DeleteAllDownloaded(deleteDisk bool) (interface{}, error) {
+	if deleteDisk {
+		return a.deleteRecordedDownloads("")
+	}
 	queue := a.downloadQueue()
 	if queue == nil {
 		return map[string]interface{}{"success": true, "count": 0}, nil
@@ -313,7 +304,28 @@ func (a *App) DeleteAllDownloaded(deleteDisk bool) (interface{}, error) {
 	for _, t := range tasks {
 		ids = append(ids, t.ID)
 	}
-	return a.DeleteTasksWithFiles(ids, deleteDisk)
+	return a.DeleteTasksWithFiles(ids, false)
+}
+
+func (a *App) deleteRecordedDownloads(seriesID string) (interface{}, error) {
+	inventory, err := a.downloadInventory()
+	if err != nil {
+		return nil, err
+	}
+	files := make(map[string]os.FileInfo)
+	for id, item := range inventory {
+		if seriesID == "" || id == seriesID {
+			maps.Copy(files, item.onDisk)
+		}
+	}
+	count, freed, failures := a.downloadQueue().DeleteRecordedFiles(files)
+	message := ""
+	if err := errors.Join(failures...); err != nil {
+		message = err.Error()
+	}
+	return map[string]interface{}{
+		"success": len(failures) == 0, "count": count, "freed": freed, "failed": len(failures), "error": message,
+	}, nil
 }
 
 // RescanDownloads rescans download status

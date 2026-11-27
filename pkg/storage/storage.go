@@ -25,10 +25,11 @@ func NewStore() *Store {
 	if err != nil {
 		home = "."
 	}
-	return newStore(home)
+	return NewStoreAt(home)
 }
 
-func newStore(home string) *Store {
+// NewStoreAt opens the library and watch history in the supplied user directory.
+func NewStoreAt(home string) *Store {
 	dir := filepath.Join(home, ".niuyouguo")
 	oldDir := filepath.Join(home, ".hongguo")
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -224,4 +225,3 @@ func (s *Store) ImportData(data StoreData, merge bool) (int, int, error) {
 	}
 	return historyCount, seriesCount, nil
 }
-

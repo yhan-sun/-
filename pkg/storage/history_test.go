@@ -8,12 +8,12 @@ import (
 
 func TestHistoryRestoresMetadataForLegacyPositions(t *testing.T) {
 	home := t.TempDir()
-	s := newStore(home)
+	s := NewStoreAt(home)
 	const old = `{"history":{"9000000000000000123":{"series_id":"9000000000000000123","vid_index":2,"currentTime":8,"duration":60,"updated_at":12345}},"series":{"9000000000000000123":{"series_id":"9000000000000000123","series_title":"测试剧","cover":"cover.jpg","total":3}}}`
 	if err := os.WriteFile(s.filePath, []byte(old), 0600); err != nil {
 		t.Fatal(err)
 	}
-	s = newStore(home)
+	s = NewStoreAt(home)
 	history := s.GetWatchHistory()
 	if len(history) != 1 {
 		t.Fatalf("got %d records", len(history))
@@ -34,7 +34,7 @@ func TestHistoryRestoresMetadataForLegacyPositions(t *testing.T) {
 	if err := s.SavePlaybackPosition(pos); err != nil {
 		t.Fatal(err)
 	}
-	reloaded := newStore(home)
+	reloaded := NewStoreAt(home)
 	if got := reloaded.GetWatchHistory()[0]; !got.Completed || got.CurrentTime != 59 || got.SeriesTitle != "测试剧" {
 		t.Fatalf("last episode not restored: %+v", got)
 	}
@@ -46,7 +46,7 @@ func TestHistoryRestoresMetadataForLegacyPositions(t *testing.T) {
 }
 
 func TestHistoryWriteFailurePreservesPosition(t *testing.T) {
-	s := newStore(t.TempDir())
+	s := NewStoreAt(t.TempDir())
 	pos := WatchItem{SeriesID: "1", VidIndex: 1, CurrentTime: 14}
 	if err := s.SavePlaybackPosition(pos); err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestHistoryWriteFailurePreservesPosition(t *testing.T) {
 }
 
 func TestLibraryKeepsReportedTotalAndReturnsSnapshots(t *testing.T) {
-	s := newStore(t.TempDir())
+	s := NewStoreAt(t.TempDir())
 	episodes := []SeriesEpisodeItem{{Vid: "v", VidIndex: 1, Title: "第一集"}}
 	for i := 0; i < 2; i++ {
 		if err := s.UpsertSeries("1", "测试剧", "", 4, 1, episodes); err != nil {
@@ -85,7 +85,7 @@ func TestLibraryKeepsReportedTotalAndReturnsSnapshots(t *testing.T) {
 
 func TestStoreExportAndImportData(t *testing.T) {
 	home1 := t.TempDir()
-	s1 := newStore(home1)
+	s1 := NewStoreAt(home1)
 	pos := WatchItem{SeriesID: "series-100", VidIndex: 5, CurrentTime: 45.5, SeriesTitle: "导出剧集"}
 	if err := s1.SavePlaybackPosition(pos); err != nil {
 		t.Fatalf("SavePlaybackPosition failed: %v", err)
@@ -97,7 +97,7 @@ func TestStoreExportAndImportData(t *testing.T) {
 	}
 
 	home2 := t.TempDir()
-	s2 := newStore(home2)
+	s2 := NewStoreAt(home2)
 	hCount, sCount, err := s2.ImportData(exported, true)
 	if err != nil {
 		t.Fatalf("ImportData failed: %v", err)
@@ -113,3 +113,34 @@ func TestStoreExportAndImportData(t *testing.T) {
 	}
 }
 
+func TestPartialClipDoesNotConcludeSeriesOrOverwriteFullPosition(t *testing.T) {
+	store := NewStoreAt(t.TempDir())
+	if err := store.UpsertSeries("710000", "样片", "", 2, 2, nil); err != nil {
+		t.Fatal(err)
+	}
+	clip := WatchItem{SeriesID: "710000", VidIndex: 2, CurrentTime: 10, Duration: 10, Ended: true, Partial: true}
+	if err := store.SavePlaybackPosition(clip); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.GetWatchHistory()[0]; !got.Partial || got.Ended || got.Completed || got.Duration != 0 {
+		t.Fatalf("excerpt counted as a full episode: %+v", got)
+	}
+	full := clip
+	full.Partial, full.Ended, full.Duration, full.CurrentTime = false, false, 176, 4
+	if err := store.SavePlaybackPosition(full); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SavePlaybackPosition(clip); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.GetPlaybackPosition(clip.SeriesID); got.Partial || got.CurrentTime != 4 || got.Duration != 176 {
+		t.Fatalf("full episode resume was lost: %+v", got)
+	}
+	full.Duration, full.CurrentTime, full.Ended = 10, 10, true
+	if err := store.SavePlaybackPosition(full); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.GetWatchHistory()[0]; !got.Completed || !got.Ended {
+		t.Fatalf("short local episode did not complete: %+v", got)
+	}
+}

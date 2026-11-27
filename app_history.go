@@ -18,6 +18,7 @@ func (a *App) SavePlaybackPosition(seriesID string, vidIndex int, seconds float6
 	position.Cover, _ = metadata["cover"].(string)
 	position.Duration, _ = metadata["duration"].(float64)
 	position.Ended, _ = metadata["ended"].(bool)
+	position.Partial, _ = metadata["partial"].(bool)
 
 	if err := a.store.SavePlaybackPosition(position); err != nil {
 		a.mu.Lock()
@@ -181,6 +182,10 @@ func (a *App) ImportUserData(payload map[string]interface{}) (map[string]interfa
 			if ed, ok := m["ended"].(bool); ok {
 				item.Ended = ed
 			}
+			item.Partial, _ = m["partial"].(bool)
+			if item.Partial {
+				item.Ended, item.Duration, item.CurrentTime = false, 0, 0
+			}
 			storeData.History[sid] = item
 		}
 	}
@@ -201,4 +206,3 @@ func (a *App) ImportUserData(payload map[string]interface{}) (map[string]interfa
 		"importedSeries":  sCount,
 	}, nil
 }
-

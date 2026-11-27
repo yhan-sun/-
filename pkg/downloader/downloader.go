@@ -406,3 +406,58 @@ func (d *Downloader) DeleteTask(taskID string, deleteDisk bool) (removed bool, f
 	d.queueChanged()
 	return true, freed, nil
 }
+
+// DeleteRecordedFiles removes finished files even after a restart. Take the same
+// lock as publication so that a concurrent worker keeps its task and output.
+// A nil queue is valid when the library is opened before the downloader.
+func (d *Downloader) DeleteRecordedFiles(files map[string]os.FileInfo) (count int, freed int64, failures []error) {
+	inUse := make(map[string]bool)
+	completed := make(map[string][]string)
+	changed := false
+	if d != nil {
+		d.mu.Lock()
+		defer func() {
+			d.mu.Unlock()
+			if changed {
+				d.queueChanged()
+			}
+		}()
+		for id, task := range d.tasks {
+			if _, selected := files[task.SavePath]; !selected {
+				continue
+			}
+			if task.cancel != nil || task.Status == StatusPending {
+				inUse[task.SavePath] = true
+			} else if task.Status == StatusCompleted {
+				completed[task.SavePath] = append(completed[task.SavePath], id)
+			}
+		}
+	}
+	for path, recorded := range files {
+		if inUse[path] {
+			failures = append(failures, fmt.Errorf("《%s》正在下载", filepath.Base(path)))
+			continue
+		}
+		info, err := os.Lstat(path)
+		if err == nil {
+			if !info.Mode().IsRegular() || !os.SameFile(info, recorded) {
+				failures = append(failures, fmt.Errorf("《%s》已变更，请刷新后重试", filepath.Base(path)))
+				continue
+			}
+			err = os.Remove(path)
+			if err == nil {
+				count++
+				freed += info.Size()
+			}
+		}
+		if err != nil && !os.IsNotExist(err) {
+			failures = append(failures, err)
+			continue
+		}
+		for _, id := range completed[path] {
+			delete(d.tasks, id)
+			changed = true
+		}
+	}
+	return
+}

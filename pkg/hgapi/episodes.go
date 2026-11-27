@@ -18,6 +18,8 @@ const (
 )
 
 type Episode struct {
+	Status       string `json:"status,omitempty"`
+	FileURL      string `json:"fileUrl,omitempty"`
 	Vid          string `json:"vid"`
 	VidIndex     int    `json:"vid_index"`
 	Title        string `json:"title"`
@@ -90,8 +92,8 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 	}
 
 	urls := []string{
-		fmt.Sprintf("%s/player/%s", SiteOrigin, seriesID),
 		fmt.Sprintf("%s/detail?series_id=%s", SiteOrigin, seriesID),
+		fmt.Sprintf("%s/player/%s", SiteOrigin, seriesID),
 	}
 
 	// Direct transport (no proxy) to avoid proxy hangs on domestic CDN
@@ -177,13 +179,13 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 			continue
 		}
 
+		if countErr != nil {
+			accessibleCnt = -1
+		}
 		episodes := make([]Episode, len(vidListRaw))
 		for i, v := range vidListRaw {
 			vid := fmt.Sprintf("%v", v)
-			locked := false
-			if countErr == nil && accessibleCnt > 0 && i >= accessibleCnt {
-				locked = true
-			}
+			locked := countErr == nil && accessibleCnt >= 0 && i >= accessibleCnt
 			episodes[i] = Episode{
 				Vid:          vid,
 				VidIndex:     i + 1,
@@ -191,16 +193,17 @@ func FetchSeriesEpisodes(ctx context.Context, seriesID string) (*SeriesDetail, e
 				SeriesID:     sid,
 				SeriesTitle:  seriesTitle,
 				Cover:        cover,
-				WebAvailable: true,
+				WebAvailable: countErr == nil && accessibleCnt >= 0 && !locked,
 				Locked:       locked,
 			}
 		}
 
+		total, _ := strconv.Atoi(fmt.Sprint(detail["episode_cnt"]))
 		return &SeriesDetail{
 			SeriesID:              sid,
 			SeriesTitle:           seriesTitle,
 			Cover:                 cover,
-			Total:                 len(episodes),
+			Total:                 max(total, len(episodes)),
 			WebAccessibleEpisodes: accessibleCnt,
 			Episodes:              episodes,
 			Source:                "web",

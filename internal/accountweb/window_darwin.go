@@ -21,7 +21,11 @@ var showLogin string
 
 // Open returns the surface that opened. Authentication takes place on that surface.
 func Open(inBrowser bool) (string, error) {
-	url, script := C.CString(website), C.CString(showLogin)
+	return openSite(website, showLogin, inBrowser)
+}
+
+func openSite(target, loginScript string, inBrowser bool) (string, error) {
+	url, script := C.CString(target), C.CString(loginScript)
 	defer C.free(unsafe.Pointer(url))
 	defer C.free(unsafe.Pointer(script))
 

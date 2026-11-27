@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -235,26 +236,28 @@ func (a *App) GetMediaSources() (interface{}, error) {
 	}, nil
 }
 
+var errCustomSourcesUnavailable = errors.New("当前桌面版未接入自定义片源")
+
 func (a *App) GetCustomSources() (interface{}, error) {
 	return map[string]interface{}{"success": true, "sources": []interface{}{}}, nil
 }
 
-// SetBuiltinSourceEnabled enables or disables a builtin source
+// The desktop catalog has one built-in source, which is always enabled.
 func (a *App) SetBuiltinSourceEnabled(sourceID string, enabled bool) (interface{}, error) {
+	if sourceID != "hongguo" || !enabled {
+		return nil, fmt.Errorf("当前桌面版仅提供固定开启的内置片源")
+	}
 	return map[string]interface{}{"success": true}, nil
 }
 
-// SaveCustomSource saves a custom source configuration
 func (a *App) SaveCustomSource(source map[string]interface{}) (interface{}, error) {
-	return map[string]interface{}{"success": true}, nil
+	return nil, errCustomSourcesUnavailable
 }
 
-// DeleteCustomSource deletes a custom source configuration
 func (a *App) DeleteCustomSource(id string) (interface{}, error) {
-	return map[string]interface{}{"success": true}, nil
+	return nil, errCustomSourcesUnavailable
 }
 
-// TestCustomSource tests connectivity to a custom media source
 func (a *App) TestCustomSource(source map[string]interface{}) (interface{}, error) {
-	return map[string]interface{}{"success": true}, nil
+	return nil, errCustomSourcesUnavailable
 }

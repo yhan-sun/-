@@ -12,6 +12,7 @@
 @end
 
 static HGAccountWindow *accountWindow;
+static HGAccountWindow *playbackWindow;
 
 @implementation HGAccountWindow
 
@@ -44,7 +45,7 @@ static HGAccountWindow *accountWindow;
 }
 
 - (void)loadHome {
-    self.presentLoginOnLoad = YES;
+    self.presentLoginOnLoad = self.loginScript.length > 0;
     [self.siteView loadRequest:[NSURLRequest requestWithURL:self.homeURL]];
 }
 
@@ -119,7 +120,8 @@ static HGAccountWindow *accountWindow;
 - (void)windowWillClose:(NSNotification *)notification {
     self.siteView.navigationDelegate = nil;
     [self.siteView stopLoading];
-    accountWindow = nil;
+    if (accountWindow == self) accountWindow = nil;
+    if (playbackWindow == self) playbackWindow = nil;
 }
 @end
 
@@ -133,13 +135,24 @@ int hgOpenAccountSite(const char *site, const char *loginScript, int inBrowser) 
                 opened = [NSWorkspace.sharedWorkspace openURL:url];
                 return;
             }
-            if (!accountWindow) {
-                accountWindow = [[HGAccountWindow alloc] initWithURL:url loginScript:script];
+            HGAccountWindow *controller;
+            if (script.length) {
+                if (!accountWindow) accountWindow = [[HGAccountWindow alloc] initWithURL:url loginScript:script];
+                controller = accountWindow;
+            } else {
+                if (!playbackWindow) {
+                    playbackWindow = [[HGAccountWindow alloc] initWithURL:url loginScript:nil];
+                    playbackWindow.window.title = @"红果短剧 · 官方播放";
+                } else if (![playbackWindow.siteView.URL isEqual:url]) {
+                    playbackWindow.homeURL = url;
+                    [playbackWindow loadHome];
+                }
+                controller = playbackWindow;
             }
-            [accountWindow.window deminiaturize:nil];
-            [accountWindow showWindow:nil];
+            [controller.window deminiaturize:nil];
+            [controller showWindow:nil];
             [NSApp activateIgnoringOtherApps:YES];
-            opened = accountWindow.window.isVisible;
+            opened = controller.window.isVisible;
         };
         if (NSThread.isMainThread) show();
         else dispatch_sync(dispatch_get_main_queue(), show);

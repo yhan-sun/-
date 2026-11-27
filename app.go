@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"hongguo/internal/accountweb"
 	"hongguo/pkg/crypto"
 	"hongguo/pkg/device"
 	"hongguo/pkg/downloader"
@@ -34,6 +36,8 @@ type App struct {
 	healedIDs    map[string]string
 	alwaysOnTop  bool
 	windowLayout string
+	miniWindowMu sync.Mutex
+	miniWindow   *playerWindowFrame
 }
 
 // NewApp creates a new App application struct
@@ -268,65 +272,77 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 	if ok && cached != nil {
 		return cached, nil
 	}
-	if item := a.store.GetSeries(seriesID); item != nil && len(item.Episodes) > 0 && len(item.Episodes) >= item.Total {
-		eps := make([]hgapi.Episode, len(item.Episodes))
-		for i, ep := range item.Episodes {
-			eps[i] = hgapi.Episode{
-				Vid:          ep.Vid,
-				VidIndex:     ep.VidIndex,
-				Title:        ep.Title,
-				SeriesID:     item.SeriesID,
-				SeriesTitle:  item.SeriesTitle,
-				Cover:        ep.Cover,
-				WebAvailable: true,
-				Locked:       false,
+	item := a.store.GetSeries(seriesID)
+	var stored *hgapi.SeriesDetail
+	if item != nil && len(item.Episodes) > 0 {
+		stored = &hgapi.SeriesDetail{
+			SeriesID: item.SeriesID, SeriesTitle: item.SeriesTitle, Cover: item.Cover, Total: item.Total,
+			WebAccessibleEpisodes: item.WebAccessibleEpisodes, Source: item.CatalogSource,
+		}
+		for _, ep := range item.Episodes {
+			stored.Episodes = append(stored.Episodes, hgapi.Episode{
+				Vid: ep.Vid, VidIndex: ep.VidIndex, Title: ep.Title, Cover: ep.Cover,
+				SeriesID: item.SeriesID, SeriesTitle: item.SeriesTitle,
+				WebAvailable: ep.WebAvailable && !ep.Locked, Locked: ep.Locked,
+			})
+		}
+	}
+	detail := stored
+	// Older catalogs counted every listed episode as available on the web.
+	if stored != nil && stored.Source == "" && stored.WebAccessibleEpisodes == len(stored.Episodes) {
+		stored.WebAccessibleEpisodes = -1
+		for i := range stored.Episodes {
+			stored.Episodes[i].WebAvailable = false
+		}
+	}
+	if stored == nil || (ctx != nil && (stored.Source != "web" || time.Since(time.UnixMilli(item.UpdatedAt)) >= 24*time.Hour)) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		lookup := ctx
+		if stored != nil {
+			var cancel context.CancelFunc
+			lookup, cancel = context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
+		}
+		web, err := hgapi.FetchSeriesEpisodes(lookup, seriesID)
+		if err == nil && web != nil && len(web.Episodes) > 0 {
+			// Some public catalogs return IDs only for the first few episodes.
+			// Keep previously identified episodes so downloaded files remain discoverable.
+			if stored != nil && len(web.Episodes) < web.Total {
+				listed := len(web.Episodes)
+				for _, ep := range stored.Episodes {
+					if ep.VidIndex <= listed || ep.VidIndex > web.Total {
+						continue
+					}
+					ep.WebAvailable = web.WebAccessibleEpisodes >= ep.VidIndex
+					ep.Locked = web.WebAccessibleEpisodes >= 0 && !ep.WebAvailable
+					web.Episodes = append(web.Episodes, ep)
+				}
+			}
+			detail = web
+		} else if stored == nil {
+			if dev == nil {
+				if err == nil {
+					err = fmt.Errorf("来源没有返回剧集清单")
+				}
+				return nil, err
+			}
+			detail, err = hgapi.FetchVideoDetail(ctx, seriesID, dev)
+			if err != nil {
+				return nil, err
 			}
 		}
-		detail := &hgapi.SeriesDetail{
-			SeriesID:              item.SeriesID,
-			SeriesTitle:           item.SeriesTitle,
-			Cover:                 item.Cover,
-			Total:                 item.Total,
-			WebAccessibleEpisodes: item.Total,
-			Episodes:              eps,
-		}
+	}
+	if detail == nil || len(detail.Episodes) == 0 {
+		return nil, fmt.Errorf("来源没有返回剧集清单")
+	}
+	if detail == stored {
 		a.mu.Lock()
 		a.seriesMap[seriesID] = detail
 		a.mu.Unlock()
 		return detail, nil
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	if dev == nil {
-		var err error
-		dev, err = device.RegisterDevice()
-		if err == nil {
-			a.mu.Lock()
-			a.dev = dev
-			a.registered = true
-			a.mu.Unlock()
-		}
-	}
-
-	var detail *hgapi.SeriesDetail
-	var err error
-
-	if dev != nil {
-		detail, err = hgapi.FetchVideoDetail(ctx, seriesID, dev)
-		if err != nil {
-			log.Printf("[App] FetchVideoDetail failed: %v, falling back to web", err)
-		}
-	}
-
-	if detail == nil || len(detail.Episodes) == 0 {
-		detail, err = hgapi.FetchSeriesEpisodes(ctx, seriesID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	episodes := make([]storage.SeriesEpisodeItem, len(detail.Episodes))
 	for i, ep := range detail.Episodes {
 		episodes[i] = storage.SeriesEpisodeItem{
@@ -340,7 +356,7 @@ func (a *App) ensureSeries(seriesID string) (*hgapi.SeriesDetail, error) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if err := a.store.UpsertSeries(detail.SeriesID, detail.SeriesTitle, detail.Cover, detail.Total, detail.WebAccessibleEpisodes, episodes); err != nil {
+	if err := a.store.UpsertSeries(detail.SeriesID, detail.SeriesTitle, detail.Cover, detail.Total, detail.WebAccessibleEpisodes, episodes, detail.Source); err != nil {
 		return nil, fmt.Errorf("保存剧库失败: %w", err)
 	}
 	a.seriesMap[seriesID] = detail
@@ -361,7 +377,7 @@ func (a *App) SearchResolve(seriesID string) (interface{}, error) {
 
 	return map[string]interface{}{
 		"success": true,
-		"data":    detail,
+		"data":    a.seriesWithLocalFiles(detail),
 	}, nil
 }
 
@@ -378,7 +394,7 @@ func (a *App) GetSeriesEpisodes(seriesID string) (interface{}, error) {
 
 	return map[string]interface{}{
 		"success": true,
-		"data":    detail,
+		"data":    a.seriesWithLocalFiles(detail),
 	}, nil
 }
 
@@ -414,7 +430,7 @@ func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, er
 				nextIdx := int(vIdx) + 1
 				if detail := a.store.GetSeries(seriesID); detail != nil {
 					for _, ep := range detail.Episodes {
-						if ep.VidIndex == nextIdx && ep.Vid != "" {
+						if ep.VidIndex == nextIdx && ep.Vid != "" && !ep.Locked {
 							proxy.Prewarm(seriesID, ep.Vid)
 							break
 						}
@@ -442,7 +458,7 @@ func (a *App) PrepareOnlinePlay(payload map[string]interface{}) (interface{}, er
 		nextIdx := int(vIdx) + 1
 		if detail := a.store.GetSeries(seriesID); detail != nil {
 			for _, ep := range detail.Episodes {
-				if ep.VidIndex == nextIdx && ep.Vid != "" {
+				if ep.VidIndex == nextIdx && ep.Vid != "" && !ep.Locked {
 					proxy.Prewarm(seriesID, ep.Vid)
 					break
 				}
@@ -473,19 +489,8 @@ func (a *App) PlaySeries(payload map[string]interface{}) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	detail, err := a.ensureSeries(seriesID)
-	if err != nil {
+	if _, err := a.ensureSeries(seriesID); err != nil {
 		return map[string]interface{}{"success": false, "error": err.Error()}, nil
-	}
-
-	// Prewarm first episode stream
-	if detail != nil && len(detail.Episodes) > 0 {
-		a.mu.Lock()
-		proxy := a.proxy
-		a.mu.Unlock()
-		if proxy != nil {
-			proxy.Prewarm(seriesID, detail.Episodes[0].Vid)
-		}
 	}
 
 	// One native event opens the player for every caller.
@@ -526,19 +531,9 @@ func (a *App) PromoteOnlinePlay(payload map[string]interface{}) (interface{}, er
 
 // HongguoResolve resolves drama details from URL or seriesId
 func (a *App) HongguoResolve(input string) (interface{}, error) {
-	input = strings.TrimSpace(input)
-	sid := input
-	if strings.Contains(input, "series_id=") {
-		parts := strings.Split(input, "series_id=")
-		if len(parts) > 1 {
-			sid = strings.Split(parts[1], "&")[0]
-		}
-	} else if strings.Contains(input, "/player/") {
-		parts := strings.Split(input, "/player/")
-		if len(parts) > 1 {
-			sid = strings.Split(parts[1], "?")[0]
-			sid = strings.Split(sid, "/")[0]
-		}
+	sid, err := accountweb.SeriesID(input)
+	if err != nil {
+		return map[string]interface{}{"success": false, "error": err.Error()}, nil
 	}
 	return a.SearchResolve(sid)
 }

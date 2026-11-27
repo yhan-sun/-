@@ -7,8 +7,7 @@ import (
 )
 
 func TestAppExportAndImportUserData(t *testing.T) {
-	app := NewApp()
-	app.store = storage.NewStore()
+	app := &App{store: storage.NewStoreAt(t.TempDir())}
 
 	// 1. Save a playback position
 	saved, err := app.SavePlaybackPosition("series-exp-1", 3, 20.5, map[string]interface{}{

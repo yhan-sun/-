@@ -9,7 +9,7 @@ import (
 
 func TestSettingsRoundTrip(t *testing.T) {
 	home := t.TempDir()
-	store := newStore(home)
+	store := NewStoreAt(home)
 	directory := filepath.Join(home, "videos")
 	saved, err := store.SaveSettings(map[string]interface{}{
 		"root":                    directory,
@@ -33,7 +33,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 		saved.ProxyPort != 1080 || !saved.ExportText.Reviews || saved.StealthWakeRegion.Width != 0.5 {
 		t.Fatal("settings did not match the submitted fields")
 	}
-	reopened := newStore(home)
+	reopened := NewStoreAt(home)
 	if !reflect.DeepEqual(reopened.GetSettings(), saved) {
 		t.Fatal("saved settings changed after reopening the store")
 	}
@@ -49,12 +49,12 @@ func TestSettingsRoundTrip(t *testing.T) {
 
 func TestLoadLegacySettings(t *testing.T) {
 	home := t.TempDir()
-	store := newStore(home)
+	store := NewStoreAt(home)
 	const legacy = `{"settings":{"download_path":"old-downloads","cache_next_episode":false,"download_metadata":true,"max_concurrent":99},"history":{"old":{"series_id":"old"}}}`
 	if err := os.WriteFile(store.filePath, []byte(legacy), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reopened := newStore(home)
+	reopened := NewStoreAt(home)
 	settings := reopened.GetSettings()
 	if settings.Root != "old-downloads" || settings.DownloadPath != settings.Root || settings.CacheNextEpisode ||
 		!settings.DownloadMetadata || !settings.ShowDanmakuControls || !settings.CompatMode || settings.MaxConcurrent != 3 || settings.UIZoom != 1 {
@@ -64,20 +64,20 @@ func TestLoadLegacySettings(t *testing.T) {
 	if err != nil || saved.Root != "new-downloads" || saved.DownloadPath != saved.Root {
 		t.Fatalf("legacy download_path update failed, err = %v", err)
 	}
-	if newStore(home).GetPlaybackPosition("old") == nil {
+	if NewStoreAt(home).GetPlaybackPosition("old") == nil {
 		t.Fatal("changing preferences lost watch history from the older file")
 	}
 }
 
 func TestSettingsZoomRange(t *testing.T) {
 	home := t.TempDir()
-	store := newStore(home)
+	store := NewStoreAt(home)
 	for _, stored := range []string{`"invalid"`, "3", "0"} {
 		state := `{"settings":{"ui_zoom":` + stored + `,"download_metadata":true}}`
 		if err := os.WriteFile(store.filePath, []byte(state), 0600); err != nil {
 			t.Fatal(err)
 		}
-		saved := newStore(home).GetSettings()
+		saved := NewStoreAt(home).GetSettings()
 		if saved.UIZoom != 1 || !saved.DownloadMetadata {
 			t.Fatal("invalid legacy zoom must use the default and preserve the other preferences")
 		}
@@ -90,14 +90,14 @@ func TestSettingsZoomRange(t *testing.T) {
 	}
 	for _, zoom := range []interface{}{0.49, 2.01, nil, "invalid"} {
 		_, err := store.SaveSettings(map[string]interface{}{"ui_zoom": zoom})
-		if err == nil || store.GetSettings().UIZoom != 2 || newStore(home).GetSettings().UIZoom != 2 {
+		if err == nil || store.GetSettings().UIZoom != 2 || NewStoreAt(home).GetSettings().UIZoom != 2 {
 			t.Fatalf("invalid zoom %v overwrote the previous value or returned success", zoom)
 		}
 	}
 }
 
 func TestSettingsFailedSavePreservesPreviousValues(t *testing.T) {
-	store := newStore(t.TempDir())
+	store := NewStoreAt(t.TempDir())
 	before, err := store.SaveSettings(map[string]interface{}{"custom_sources": []string{"existing"}})
 	if err != nil {
 		t.Fatal(err)

@@ -223,7 +223,7 @@ func FetchVideoDetail(ctx context.Context, seriesID string, identity *crypto.Dev
 			SeriesID:     sid,
 			SeriesTitle:  vd.SeriesTitle,
 			Cover:        epCover,
-			WebAvailable: true,
+			WebAvailable: false,
 			Locked:       false,
 		}
 	}
@@ -238,7 +238,7 @@ func FetchVideoDetail(ctx context.Context, seriesID string, identity *crypto.Dev
 		SeriesTitle:           vd.SeriesTitle,
 		Cover:                 vd.SeriesCover,
 		Total:                 total,
-		WebAccessibleEpisodes: len(episodes),
+		WebAccessibleEpisodes: -1,
 		Episodes:              episodes,
 		Source:                "app_video_detail",
 	}, nil

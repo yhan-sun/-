@@ -19,6 +19,9 @@ func settingsForUI(settings storage.Settings) settingsResponse {
 	settings.ProxyPassword = ""
 	// Older state files can carry an enabled flag without a configured transport.
 	settings.ProxyEnabled = false
+	// Present the effective download options even for settings imported from another edition.
+	settings.DownloadQuality = "auto"
+	settings.ExportText = storage.TextExport{}
 	return settingsResponse{Settings: settings, Success: true, ProxyPasswordSet: hasPassword}
 }
 

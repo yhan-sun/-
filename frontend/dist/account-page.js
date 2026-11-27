@@ -1,6 +1,7 @@
 const copy = {
   zh: {
     title: '牛油果账号',
+    close: '关闭账号窗口',
     signIn: '官网登录',
     instructions: '在官网使用手机号验证码，或用短剧 App 扫码。若先看到首页，点右上角「登录」。',
     open: '打开官网登录',
@@ -15,6 +16,7 @@ const copy = {
   },
   en: {
     title: 'Niuyouguo account',
+    close: 'Close account window',
     signIn: 'Sign in on the official site',
     instructions: 'Use an SMS code or scan the QR code with the mobile app. If the homepage opens, select Sign in at the top right.',
     open: 'Open sign-in window',
@@ -32,12 +34,27 @@ const copy = {
 export function createAccountPage(React, useLanguage, getLanguage, AccountIcon) {
   const h = React.createElement;
 
-  return function AccountPage({ onNavigate }) {
+  return function AccountPage({ inModal = false, onClose, onNavigate }) {
     useLanguage();
     const labels = copy[getLanguage()] || copy.zh;
     const [pending, setPending] = React.useState('');
     const [opened, setOpened] = React.useState('');
     const [error, setError] = React.useState('');
+    const dialog = React.useRef(null);
+    const titleId = React.useId();
+    const nativeDialog = typeof window.HTMLDialogElement?.prototype.showModal === 'function';
+
+    React.useLayoutEffect(() => {
+      if (!inModal) return;
+      const element = dialog.current;
+      const invoker = document.activeElement;
+      if (nativeDialog) element.showModal();
+      else element.querySelector('button').focus();
+      return () => {
+        if (nativeDialog) element.close();
+        if (invoker?.isConnected) invoker.focus({ preventScroll: true });
+      };
+    }, [inModal, nativeDialog]);
 
     async function open(inBrowser) {
       setPending(inBrowser ? 'browser' : 'window');
@@ -56,10 +73,13 @@ export function createAccountPage(React, useLanguage, getLanguage, AccountIcon) 
       }
     }
 
-    return h('div', { className: 'account-page' },
+    const content = h('div', { className: 'account-page' },
       h('header', { className: 'account-page-header' },
         h(AccountIcon, { size: 22 }),
-        h('div', null, h('h2', null, labels.title), h('p', null, 'hongguoduanju.com'))
+        h('div', null, h('h2', { id: titleId }, labels.title), h('p', null, 'hongguoduanju.com')),
+        inModal && h('button', {
+          className: 'icon-btn account-close', type: 'button', 'aria-label': labels.close, onClick: onClose
+        }, '×')
       ),
       h('section', { className: 'account-card account-login-copy', 'aria-label': labels.signIn },
         h('h3', null, labels.signIn),
@@ -78,9 +98,34 @@ export function createAccountPage(React, useLanguage, getLanguage, AccountIcon) 
         h('h3', null, labels.history),
         h('p', null, labels.historyInfo),
         h('div', { className: 'account-page-actions' },
-          h('button', { type: 'button', className: 'btn btn-outline', onClick: () => onNavigate('history') }, labels.openHistory)
+          h('button', {
+            type: 'button', className: 'btn btn-outline', onClick: () => {
+              onClose?.();
+              onNavigate('player');
+            }
+          }, labels.openHistory)
         )
       )
     );
+    if (!inModal) return content;
+    const panel = h(nativeDialog ? 'dialog' : 'div', {
+      ref: dialog, className: 'account-login-dialog', role: 'dialog', 'aria-modal': true, 'aria-labelledby': titleId,
+      onCancel: event => { event.preventDefault(); onClose(); },
+      onClick: event => { if (nativeDialog && event.target === dialog.current) onClose(); },
+      onKeyDown: event => {
+        if (nativeDialog) return;
+        if (event.key === 'Escape') { event.preventDefault(); onClose(); }
+        if (event.key !== 'Tab') return;
+        const buttons = dialog.current.querySelectorAll('button:not(:disabled)');
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    }, content);
+    if (nativeDialog) return panel;
+    return h('div', {
+      className: 'account-dialog-fallback',
+      onClick: event => { if (event.target === event.currentTarget) onClose(); }
+    }, panel);
   };
 }

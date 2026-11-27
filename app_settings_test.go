@@ -8,8 +8,15 @@ import (
 )
 
 func TestSettingsComponentResponse(t *testing.T) {
-	legacy := storage.Settings{ProxyEnabled: true, ProxyPassword: "test-password", PictureInPictureMode: "native"}
-	data, err := json.Marshal(settingsForUI(legacy))
+	legacy := storage.Settings{
+		ProxyEnabled: true, ProxyPassword: "test-password", PictureInPictureMode: "native",
+		DownloadQuality: "1080p", ExportText: storage.TextExport{Reviews: true},
+	}
+	effective := settingsForUI(legacy)
+	if effective.DownloadQuality != "auto" || effective.ExportText != (storage.TextExport{}) {
+		t.Fatal("unsupported download options were offered to the interface")
+	}
+	data, err := json.Marshal(effective)
 	if err != nil {
 		t.Fatal(err)
 	}

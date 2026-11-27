@@ -9,7 +9,7 @@ import (
 )
 
 func TestAppBrowseCategories(t *testing.T) {
-	app := NewApp()
+	app := new(App)
 	cats, err := app.BrowseCategories()
 	if err != nil {
 		t.Fatalf("BrowseCategories failed: %v", err)
@@ -24,8 +24,26 @@ func TestAppBrowseCategories(t *testing.T) {
 	}
 }
 
+func TestDesktopSourceChangesReportAvailability(t *testing.T) {
+	app := new(App)
+	if _, err := app.SetBuiltinSourceEnabled("hongguo", true); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []func() (interface{}, error){
+		func() (interface{}, error) { return app.SetBuiltinSourceEnabled("hongguo", false) },
+		func() (interface{}, error) { return app.SetBuiltinSourceEnabled("other", true) },
+		func() (interface{}, error) { return app.SaveCustomSource(nil) },
+		func() (interface{}, error) { return app.TestCustomSource(nil) },
+		func() (interface{}, error) { return app.DeleteCustomSource("other") },
+	} {
+		if _, err := command(); err == nil {
+			t.Fatal("source operation reported success without applying a change")
+		}
+	}
+}
+
 func TestAppBrowseListLive(t *testing.T) {
-	app := NewApp()
+	app := new(App)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	app.ctx = ctx

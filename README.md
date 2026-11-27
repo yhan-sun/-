@@ -41,6 +41,10 @@
 go test -race ./... -skip 'Live|TestLandpageAndResolve'
 node --test frontend/shim.test.cjs
 
+# 使用本机测试片单验证发布界面的登录、搜索、滚动和选集操作
+# 在装有 Python Playwright 和 Chromium 的环境中运行
+python3 frontend/test_ui.py
+
 # 编译二进制
 go build -tags production -ldflags "-s -w -extldflags '-framework UniformTypeIdentifiers'" -o "bin/niuyouguo-player" .
 ```

@@ -27,6 +27,48 @@ func waitUntil(t *testing.T, condition func() bool) {
 	}
 }
 
+func TestDeleteRecordedFilesRechecksIdentityAndActiveWriters(t *testing.T) {
+	root := t.TempDir()
+	recorded := make(map[string]os.FileInfo)
+	for _, name := range []string{"ready", "active", "replaced", "link"} {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte(name), 0600); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		recorded[path] = info
+	}
+	replaced := filepath.Join(root, "replaced")
+	link := filepath.Join(root, "link")
+	for _, path := range []string{replaced, link} {
+		if err := os.Rename(path, path+".original"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(replaced, []byte("new file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(replaced, link); err != nil {
+		t.Fatal(err)
+	}
+	queue := NewDownloader(nil, root, nil)
+	for name, status := range map[string]TaskStatus{"ready": StatusCompleted, "active": StatusPending} {
+		queue.tasks[name] = &job{DownloadTask: DownloadTask{ID: name, SavePath: filepath.Join(root, name), Status: status}}
+	}
+	count, freed, failures := queue.DeleteRecordedFiles(recorded)
+	if count != 1 || freed != int64(len("ready")) || len(failures) != 3 || queue.tasks["ready"] != nil || queue.tasks["active"] == nil {
+		t.Fatalf("unexpected cleanup: count=%d bytes=%d failures=%v tasks=%v", count, freed, failures, queue.tasks)
+	}
+	for _, path := range []string{replaced, link, filepath.Join(root, "active")} {
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestManagerSnapshotsAndFiles(t *testing.T) {
 	const body = "local media fixture"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

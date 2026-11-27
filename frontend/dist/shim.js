@@ -79,6 +79,7 @@
 
   const names = {
     openExternalUrl: 'OpenExternalURL',
+    openOfficialEpisode: 'OpenOfficialEpisode',
     searchSeriesMore: 'SearchSeries',
     downloadSingleEpisode: 'DownloadSingleEpisode',
     downloadFollowingEpisodes: 'DownloadFollowingEpisodes',
@@ -119,20 +120,27 @@
     exportUserData: 'ExportUserData',
     importUserData: 'ImportUserData'
   };
+  let pictureInPictureMode = 'custom';
   async function invoke(method, args) {
     const app = await getApp();
     if (!app) throw new Error('桌面服务尚未就绪，请重试');
     const name = names[method] || method[0].toUpperCase() + method.slice(1);
     const binding = app[name] || app[method];
     if (typeof binding !== 'function') throw new Error('当前桌面版暂不支持此功能');
-    return binding(...args);
+    const result = await binding(...args);
+    if ((method === 'getSettings' || method === 'saveSettings') && ['custom', 'native'].includes(result?.picture_in_picture_mode)) {
+      pictureInPictureMode = result.picture_in_picture_mode;
+    }
+    return result;
   }
 
   let interfaceZoom;
   let pendingZoomChange = Promise.resolve();
   function updateWindowWidth() {
     // CSS media queries keep using the unscaled viewport in WKWebView.
-    document.documentElement.classList.toggle('compact-window', window.innerWidth <= 600 * (interfaceZoom ?? 1));
+    const width = window.innerWidth / (interfaceZoom ?? 1);
+    document.documentElement.classList.toggle('compact-window', width <= 600);
+    document.documentElement.classList.toggle('stacked-toolbar', width < 350);
   }
 
   function applyZoom(zoom) {
@@ -167,6 +175,19 @@
   // These callers consume the raw value and handle a rejected Promise themselves.
   const api = {
     platform: 'darwin',
+    capabilities: Object.freeze({
+      resolvedLocalEpisodes: true,
+      customSources: false,
+      proxySettings: false,
+      downloadQuality: false,
+      textExport: false,
+      mergeSeries: false,
+      casting: false,
+      timedComments: false,
+      batchHistoryUpdates: false,
+      miniPlayer: true,
+      searchProviderPreference: false
+    }),
     nativePictureInPicture: true,
     getAppInfo: async () => ({
       version: '7.9.0', brand: '牛油果短剧', appName: '牛油果短剧', platform: 'darwin', preview: false
@@ -181,6 +202,7 @@
       }
     },
     savePlaybackPosition: (...args) => invoke('savePlaybackPosition', args),
+    acknowledgeWatchUpdates: seriesId => invoke('acknowledgeWatchUpdates', [seriesId]),
     selectFolder: () => invoke('selectFolder', []),
     getSettings,
     changeWindowZoom(action) {
@@ -212,14 +234,16 @@
     startCasting: async () => ({ success: false, error: '当前桌面版暂不支持投屏功能' }),
     controlCasting: async () => ({ success: true }),
     testProxy: async () => ({ success: false, error: '当前桌面版尚未接入网络代理' }),
-    enterNativePictureInPicture: async () => {
-      const video = document.querySelector('.main-content[data-page="player"] video, video');
+    get pictureInPictureMode() { return pictureInPictureMode; },
+    setPlayerMiniWindow: (enabled, aspect) => invoke('setPlayerMiniWindow', [enabled, aspect]),
+    enterNativePictureInPicture: async element => {
+      const video = element?.tagName === 'VIDEO' ? element : document.querySelector('.main-content[data-page="player"]:not([hidden]) video');
       if (!video) return false;
       try {
         if (document.pictureInPictureElement) {
           await document.exitPictureInPicture();
           return false;
-        } else if (video.webkitSupportsPresentationMode && typeof video.webkitSetPresentationMode === 'function') {
+        } else if (typeof video.webkitSetPresentationMode === 'function' && video.webkitSupportsPresentationMode?.('picture-in-picture')) {
           const next = video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
           video.webkitSetPresentationMode(next);
           return next === 'picture-in-picture';
@@ -272,10 +296,10 @@
 
   // Ensure official web channel is selected by default for complete catalog & accurate official ranking
   try {
-    if (localStorage.getItem('hongguo.catalog.channel.v1') !== 'web') {
+    if (localStorage.getItem('hongguo.catalog.channel.v1') === null) {
       localStorage.setItem('hongguo.catalog.channel.v1', 'web');
     }
-    if (localStorage.getItem('hongguo.feed.catalog.channel.v1') !== 'web') {
+    if (localStorage.getItem('hongguo.feed.catalog.channel.v1') === null) {
       localStorage.setItem('hongguo.feed.catalog.channel.v1', 'web');
     }
   } catch {}
@@ -284,22 +308,6 @@
   updateWindowWidth();
   // Restore the saved size on launch, including when the first page is the catalog.
   getSettings().catch(() => {}); // Later settings reads retry after the desktop service is ready.
-
-  // Window drag: trigger immediate native drag on mousedown for custom title bar
-  window.addEventListener('mousedown', event => {
-    if (event.button !== 0 || !event.target?.closest) return;
-    if (event.target.closest('button, input, select, textarea, a, .btn, [role="button"], .no-drag, [style*="-webkit-app-region: no-drag"]')) return;
-    if (event.target.closest('.window-toolbar, .sidebar-brand, .sidebar-window-drag, .stealth-toolbar, [style*="--wails-draggable: drag"], [style*="-webkit-app-region: drag"]')) {
-      if (window.wails?.flags) {
-        window.wails.flags.deferDragToMouseMove = false;
-      }
-      if (typeof window.WailsInvoke === 'function') {
-        window.WailsInvoke('drag');
-      } else if (window.webkit?.messageHandlers?.external?.postMessage) {
-        window.webkit.messageHandlers.external.postMessage('drag');
-      }
-    }
-  }, true);
 
   // Double-click window toolbar to toggle maximize (video stage dblclick is handled cleanly by Player.jsx)
   window.addEventListener('dblclick', event => {
@@ -320,6 +328,7 @@
     if (!hudToastEl) {
       hudToastEl = document.createElement('div');
       hudToastEl.id = 'player-hud-toast';
+      hudToastEl.setAttribute('role', 'status');
       hudToastEl.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.78);color:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;transition:opacity 0.18s ease;opacity:0;backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.12);box-shadow:0 8px 24px rgba(0,0,0,0.3);';
       document.body.appendChild(hudToastEl);
     }
@@ -331,18 +340,14 @@
     }, 1200);
   }
 
-  // Global search & player shortcuts:
-  // Space (play/pause), ArrowLeft/Right (seek), ArrowUp/Down (volume), F (fullscreen), M (mute), > / < (speed)
-  // Cmd+K / Cmd+F (search), Escape (blur / close modal)
   window.addEventListener('keydown', event => {
-    // Global Cmd+K / Cmd+F for search
-    if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'f') && !event.shiftKey) {
-      const searchInput = document.querySelector('input[type="search"], .search-input, input[placeholder*="搜索"]');
+    if (document.querySelector('dialog[open], .account-dialog-fallback')) return;
+    if ((event.metaKey || event.ctrlKey) && event.key === 'f' && !event.shiftKey) {
+      const searchInput = document.querySelector('.global-search-input');
       if (searchInput) {
         event.preventDefault();
         searchInput.focus();
-        searchInput.select?.();
-        return;
+        searchInput.select();
       }
     } else if (event.key === 'Escape') {
       const activeEl = document.activeElement;
@@ -436,398 +441,6 @@
     }
   }, true);
 
-  // Watch history badge & Continue Watching shelf decorator
-  let cachedWatchHistory = [];
-  async function refreshWatchDecorations() {
-    try {
-      if (typeof window.electronAPI?.getWatchHistory !== 'function') return;
-      const res = await window.electronAPI.getWatchHistory();
-      if (res && res.results && Array.isArray(res.results)) {
-        cachedWatchHistory = res.results;
-      }
-    } catch {
-      return;
-    }
-    updateContinueWatchingShelf();
-    updateBrowseCardsBadges();
-  }
-
-  function updateContinueWatchingShelf() {
-    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
-    const shelf = document.getElementById('continue-watching-shelf');
-    if (shelf) shelf.remove();
-  }
-
-  function updateBrowseCardsBadges() {
-    // Badges and watch progress are rendered natively by React Browse.jsx
-  }
-
-  // Hook into watch history event
-  const origWatchCallback = listeners.get('watch-history-updated');
-  if (origWatchCallback) {
-    origWatchCallback.add(() => {
-      refreshWatchDecorations();
-    });
-  }
-
-  // Universal Custom Select Component (Theme-adaptive frosted glass dropdown)
-  const customSelectMap = new WeakMap();
-
-  function makeCustomSelect(select) {
-    if (!select || typeof document === 'undefined' || typeof document.createElement !== 'function') return;
-    if (select.dataset.noCustom) return;
-
-    if (customSelectMap.has(select)) {
-      const existing = customSelectMap.get(select);
-      if (existing) {
-        if (!existing.wrapper.parentNode || existing.wrapper.previousSibling !== select) {
-          select.parentNode?.insertBefore(existing.wrapper, select.nextSibling);
-        }
-        syncCustomSelect(select, existing);
-      }
-      return;
-    }
-
-    // Hide native select visually while keeping it fully interactive for React
-    select.style.setProperty('position', 'absolute', 'important');
-    select.style.setProperty('opacity', '0', 'important');
-    select.style.setProperty('pointer-events', 'none', 'important');
-    select.style.setProperty('width', '0', 'important');
-    select.style.setProperty('height', '0', 'important');
-    select.style.setProperty('margin', '0', 'important');
-    select.style.setProperty('padding', '0', 'important');
-    select.style.setProperty('border', 'none', 'important');
-    select.tabIndex = -1;
-    select.classList.add('custom-select-hidden');
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'custom-select-wrapper';
-    if (select.id) wrapper.dataset.for = select.id;
-
-    // Prevent parent <label> clicks from invoking native select
-    wrapper.addEventListener('click', e => e.stopPropagation());
-    wrapper.addEventListener('mousedown', e => e.stopPropagation());
-
-    const trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'custom-select-trigger';
-    trigger.setAttribute('aria-haspopup', 'listbox');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.setAttribute('aria-label', select.getAttribute('aria-label') || '选择器');
-
-    const labelSpan = document.createElement('span');
-    labelSpan.className = 'custom-select-label';
-
-    const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    arrowSvg.setAttribute('class', 'custom-select-arrow');
-    arrowSvg.setAttribute('viewBox', '0 0 24 24');
-    arrowSvg.setAttribute('width', '14');
-    arrowSvg.setAttribute('height', '14');
-    arrowSvg.innerHTML = '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
-
-    trigger.appendChild(labelSpan);
-    trigger.appendChild(arrowSvg);
-
-    const menu = document.createElement('div');
-    menu.className = 'custom-select-menu';
-    menu.setAttribute('role', 'listbox');
-
-    wrapper.appendChild(trigger);
-    wrapper.appendChild(menu);
-
-    let lastOptionCount = 0;
-
-    function buildOptions() {
-      menu.innerHTML = '';
-      lastOptionCount = select.options ? select.options.length : 0;
-      if (!select.options || select.options.length === 0) {
-        labelSpan.textContent = select.getAttribute('aria-label') || '请选择';
-        return;
-      }
-
-      let selectedIndex = -1;
-      if (select.value) {
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].value === select.value) {
-            selectedIndex = i;
-            break;
-          }
-        }
-      }
-      if (selectedIndex < 0) {
-        selectedIndex = select.selectedIndex >= 0 ? select.selectedIndex : 0;
-      }
-      labelSpan.textContent = select.options[selectedIndex]?.text || '';
-
-      for (let i = 0; i < select.options.length; i++) {
-        const opt = select.options[i];
-        const optDiv = document.createElement('div');
-        optDiv.className = 'custom-select-option' + (i === selectedIndex ? ' selected' : '');
-        optDiv.setAttribute('role', 'option');
-        optDiv.setAttribute('tabindex', '-1');
-        optDiv.dataset.value = opt.value;
-        optDiv.dataset.index = String(i);
-
-        const textSpan = document.createElement('span');
-        textSpan.className = 'cso-text';
-        textSpan.textContent = opt.text;
-
-        const checkSpan = document.createElement('span');
-        checkSpan.className = 'cso-check';
-        checkSpan.textContent = '✓';
-
-        optDiv.appendChild(textSpan);
-        optDiv.appendChild(checkSpan);
-
-        optDiv.addEventListener('click', e => {
-          e.preventDefault();
-          e.stopPropagation();
-          const val = optDiv.dataset.value;
-          if (select.value !== val) {
-            try {
-              const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement?.prototype || {}, 'value')?.set;
-              if (setter) {
-                setter.call(select, val);
-              } else {
-                select.value = val;
-              }
-            } catch {
-              select.value = val;
-            }
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            select.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-          sync();
-          closeMenu();
-        });
-
-        menu.appendChild(optDiv);
-      }
-    }
-
-    function sync() {
-      const currentCount = select.options ? select.options.length : 0;
-      if (currentCount !== lastOptionCount) {
-        buildOptions();
-        return;
-      }
-      if (currentCount === 0) {
-        labelSpan.textContent = select.getAttribute('aria-label') || '请选择';
-        return;
-      }
-      let idx = -1;
-      if (select.value) {
-        for (let i = 0; i < select.options.length; i++) {
-          if (select.options[i].value === select.value) {
-            idx = i;
-            break;
-          }
-        }
-      }
-      if (idx < 0) {
-        idx = select.selectedIndex >= 0 ? select.selectedIndex : 0;
-      }
-      labelSpan.textContent = select.options[idx]?.text || '';
-      const optDivs = menu.querySelectorAll('.custom-select-option');
-      optDivs.forEach((div, i) => {
-        div.classList.toggle('selected', i === idx);
-      });
-    }
-
-    function openMenu() {
-      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-        if (w !== wrapper) {
-          w.classList.remove('open');
-          w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
-        }
-      });
-      buildOptions();
-      try {
-        const rect = trigger.getBoundingClientRect();
-        const fitsBelow = window.innerHeight - rect.bottom > 220;
-        wrapper.classList.toggle('drop-up', !fitsBelow);
-      } catch {}
-      wrapper.classList.add('open');
-      trigger.setAttribute('aria-expanded', 'true');
-    }
-
-    function closeMenu() {
-      wrapper.classList.remove('open');
-      trigger.setAttribute('aria-expanded', 'false');
-    }
-
-    trigger.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (wrapper.classList.contains('open')) {
-        closeMenu();
-      } else {
-        openMenu();
-      }
-    });
-
-    trigger.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (!wrapper.classList.contains('open')) {
-          openMenu();
-        }
-      } else if (e.key === 'Escape' && wrapper.classList.contains('open')) {
-        e.preventDefault();
-        closeMenu();
-      }
-    });
-
-    select.addEventListener('change', sync);
-    select.addEventListener('input', sync);
-
-    buildOptions();
-    if (select.parentNode) {
-      select.parentNode.insertBefore(wrapper, select.nextSibling);
-    }
-    customSelectMap.set(select, { wrapper, sync, buildOptions });
-  }
-
-  function syncCustomSelect(select, info) {
-    if (!select || !info) return;
-    info.sync();
-  }
-
-  // Global dismiss handlers for custom select dropdowns
-  window.addEventListener('click', event => {
-    if (!event.target?.closest?.('.custom-select-wrapper')) {
-      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-        w.classList.remove('open');
-        w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
-      });
-    }
-  }, true);
-
-  window.addEventListener('keydown', event => {
-    if (event.key === 'Escape') {
-      document.querySelectorAll('.custom-select-wrapper.open').forEach(w => {
-        w.classList.remove('open');
-        w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
-      });
-    }
-  }, true);
-
-  // Dynamic Dropdown Enhancer: converts all selects into theme-adaptive acrylic frosted glass custom dropdown components
-  function enhanceDropdowns() {
-    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
-
-    // Convert ALL select elements into the custom transparent dropdown component
-    const allSelects = document.querySelectorAll('select');
-    for (const sel of allSelects) {
-      makeCustomSelect(sel);
-    }
-  }
-
-  function enhanceRankBadges() {
-    if (typeof document === 'undefined') return;
-    const badges = document.querySelectorAll('.browse-rank-badge:not([data-rank-styled])');
-    badges.forEach(b => {
-      b.setAttribute('data-rank-styled', 'true');
-      const text = b.textContent || '';
-      if (text.includes('第 1 名') || text.includes('第1名')) {
-        b.classList.add('rank-top-1');
-      } else if (text.includes('第 2 名') || text.includes('第2名')) {
-        b.classList.add('rank-top-2');
-      } else if (text.includes('第 3 名') || text.includes('第3名')) {
-        b.classList.add('rank-top-3');
-      }
-    });
-  }
-
-  function setupBackToTop() {
-    if (typeof document === 'undefined' || typeof document.createElement !== 'function') return;
-    if (typeof document.querySelector === 'function' && document.querySelector('#scroll-to-top-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'scroll-to-top-btn';
-    btn.className = 'scroll-to-top-btn';
-    btn.setAttribute('aria-label', '回到顶部');
-    btn.setAttribute('title', '回到顶部');
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
-
-    btn.addEventListener('click', () => {
-      const activeMain = document.querySelector?.('.main-content:not([hidden])');
-      if (activeMain && typeof activeMain.scrollTo === 'function') {
-        activeMain.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (typeof window.scrollTo === 'function') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }
-    });
-
-    document.body?.appendChild(btn);
-
-    const checkScroll = (target) => {
-      if (!target) return;
-      if (target.scrollTop > 240) {
-        btn.classList?.add('visible');
-      } else {
-        btn.classList?.remove('visible');
-      }
-    };
-
-    if (typeof document.querySelectorAll === 'function') {
-      document.querySelectorAll('.main-content').forEach(el => {
-        el.addEventListener?.('scroll', () => checkScroll(el), { passive: true });
-      });
-    }
-  }
-
-  function startDynamicObservers() {
-    if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
-    const target = document.documentElement || document.body;
-    if (!target) return;
-
-    let decorTimer = null;
-    const pageObserver = new MutationObserver(() => {
-      clearTimeout(decorTimer);
-      decorTimer = setTimeout(() => {
-        enhanceDropdowns();
-        enhanceRankBadges();
-        setupBackToTop();
-        if (document.querySelector('.browse-container')) {
-          refreshWatchDecorations();
-        }
-      }, 50);
-    });
-    try {
-      pageObserver.observe(target, { childList: true, subtree: true });
-    } catch {}
-  }
-
-  if (typeof document !== 'undefined') {
-    startDynamicObservers();
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        startDynamicObservers();
-        enhanceDropdowns();
-        enhanceRankBadges();
-        setupBackToTop();
-        refreshWatchDecorations();
-      });
-    } else {
-      enhanceDropdowns();
-      enhanceRankBadges();
-      setupBackToTop();
-      refreshWatchDecorations();
-    }
-    // Safety polling so asynchronously rendered React components are always caught
-    const pollTimer = setInterval(() => {
-      enhanceDropdowns();
-      enhanceRankBadges();
-      setupBackToTop();
-    }, 400);
-    if (pollTimer && typeof pollTimer.unref === 'function') {
-      pollTimer.unref();
-    }
-  }
-
-
-
   // Auto-dismiss modal when clicking backdrop mask
   window.addEventListener('click', event => {
     if (event.target && event.target.classList && event.target.classList.contains('modal-mask')) {
@@ -846,9 +459,9 @@
 
   // Network online/offline status notifications
   window.addEventListener('offline', () => {
-    showPlayerHUD('⚠️ 网络连接已断开');
+    showPlayerHUD(document.documentElement.lang.startsWith('en') ? 'Network disconnected' : '网络连接已断开');
   });
   window.addEventListener('online', () => {
-    showPlayerHUD('✅ 网络已恢复连接');
+    showPlayerHUD(document.documentElement.lang.startsWith('en') ? 'Back online' : '网络连接已恢复');
   });
 })();

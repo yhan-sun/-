@@ -16,6 +16,7 @@ type SeriesEpisodeItem struct {
 }
 
 type SeriesItem struct {
+	CatalogSource         string              `json:"catalog_source,omitempty"`
 	SeriesID              string              `json:"series_id"`
 	SeriesTitle           string              `json:"series_title"`
 	Cover                 string              `json:"cover"`
@@ -27,7 +28,7 @@ type SeriesItem struct {
 	Forgotten             bool                `json:"forgotten"`
 }
 
-func (s *Store) UpsertSeries(seriesID, title, cover string, total, webAccessible int, episodes []SeriesEpisodeItem) error {
+func (s *Store) UpsertSeries(seriesID, title, cover string, total, webAccessible int, episodes []SeriesEpisodeItem, catalogSource ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -35,6 +36,9 @@ func (s *Store) UpsertSeries(seriesID, title, cover string, total, webAccessible
 	next := SeriesItem{SeriesID: seriesID}
 	if previous != nil {
 		next = *previous
+	}
+	if len(catalogSource) > 0 {
+		next.CatalogSource = catalogSource[0]
 	}
 	next.SeriesTitle = cmp.Or(title, next.SeriesTitle)
 	next.Cover = cmp.Or(cover, next.Cover)
@@ -78,10 +82,17 @@ func (s *Store) GetSeries(seriesID string) *SeriesItem {
 }
 
 func (s *Store) GetSeriesList() []*SeriesItem {
+	return slices.DeleteFunc(s.RegisteredSeries(), func(item *SeriesItem) bool {
+		return item.Dismissed || item.Forgotten
+	})
+}
+
+// Removing a library entry keeps its registered downloads on disk.
+func (s *Store) RegisteredSeries() []*SeriesItem {
 	s.mu.RLock()
 	list := make([]*SeriesItem, 0, len(s.data.Series))
 	for _, item := range s.data.Series {
-		if item != nil && !item.Dismissed && !item.Forgotten {
+		if item != nil {
 			snapshot := *item
 			snapshot.Episodes = slices.Clone(item.Episodes)
 			list = append(list, &snapshot)
